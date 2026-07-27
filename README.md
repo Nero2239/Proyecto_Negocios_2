@@ -303,4 +303,4 @@ Guardar en `localStorage` (simulado)
 
 ### Reflexión Final
 
-*(Este espacio es para que compartas tu experiencia personal con el proyecto)*
+El Proyecto en si, estuvo bien, el diseño usado fue a decision nuestra al igual que el tema en cuestion, el poder hacer la clase mas dinamica me permitio visualizar como es el trabajo de un front-end y poder poner en marcha mi creatividad en el diseño de la pagina
