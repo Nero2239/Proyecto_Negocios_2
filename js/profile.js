@@ -51,7 +51,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    const purchases = [...getSavedPurchases(), ...simulatedPurchases];
+    let purchases = [];
+
+    async function loadPurchases() {
+        let saved = getSavedPurchases();
+        // Try Firebase remote first
+        if (window.__firebase && typeof window.__firebase.getOrdersByEmail === 'function') {
+            try {
+                const email = localStorage.getItem('userEmail') || null;
+                const remote = await window.__firebase.getOrdersByEmail(email);
+                // remote entries are stored with similar shape; merge them
+                const remoteMapped = remote.map(r => ({
+                    id: r.id || r.orderNumber || r.date,
+                    date: r.created_at || r.date || new Date().toLocaleDateString('es-MX'),
+                    status: r.status || 'Procesando',
+                    customer: r.customer || r.customerName || 'Cliente',
+                    address: r.address || '',
+                    payment: r.payment || r.paymentMethod || '',
+                    total: r.total || 0,
+                    products: r.products || r.items || []
+                }));
+                saved = [...remoteMapped, ...saved];
+            } catch (err) {
+                console.warn('Error fetching remote purchases', err);
+            }
+        }
+
+        purchases = [...saved, ...simulatedPurchases];
+        renderPurchases();
+    }
 
     function formatPrice(value) {
         return `$${Number(value).toFixed(2)}`;
@@ -133,5 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.key === 'Escape' && !detailModal.classList.contains('hidden')) closePurchaseDetail();
     });
 
-    renderPurchases();
+    // Load purchases (remote via Firebase if available, otherwise localStorage)
+    loadPurchases();
 });

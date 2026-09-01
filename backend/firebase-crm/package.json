@@ -1,0 +1,18 @@
+{
+  "name": "firebase-crm-backend",
+  "version": "1.0.0",
+  "description": "Simple Express API proxy for Firestore CRM (clientes collection)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "firebase-admin": "^11.11.0",
+    "dotenv": "^16.0.3"
+  }
+}

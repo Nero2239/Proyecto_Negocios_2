@@ -316,6 +316,21 @@
 
             <section id="view-clientes" class="view-section">
                 <section class="panel-grid clients-layout">
+                    <div class="panel-card crm-controls">
+                        <div class="panel-head">
+                            <h3>Controles CRM (Firestore)</h3>
+                            <p>Operaciones rápidas para probar CRUD en la colección <strong>clientes</strong>.</p>
+                        </div>
+                        <div class="crm-actions">
+                            <button id="crmRefreshBtn" class="btn btn-outline" type="button">Refrescar desde Firebase</button>
+                            <button id="crmCreateTestBtn" class="btn btn-primary" type="button">Crear cliente prueba</button>
+                            <button id="crmListConsoleBtn" class="btn btn-secondary" type="button">Listar en consola</button>
+                            <div class="crm-delete-row">
+                                <input id="crmClientIdInput" type="text" placeholder="ID cliente (para eliminar)" />
+                                <button id="crmDeleteByIdBtn" class="btn btn-outline" type="button">Eliminar por ID</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="panel-card">
                         <div class="panel-head">
                             <h3>Alta de clientes</h3>
@@ -559,6 +574,7 @@
         </div>
     </div>
 
+    <script type="module" src="js/firebase-init.js"></script>
     <script src="js/admin.js"></script>
     <script>
         // This script is added to handle form validation since admin.js is not provided for modification.
