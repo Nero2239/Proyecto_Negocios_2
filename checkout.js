@@ -150,30 +150,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return `rutaSalvajePurchases_${userEmail.toLowerCase()}`;
     }
 
-    async function savePurchase(purchase) {
+    function savePurchase(purchase) {
         const storageKey = getPurchaseStorageKey();
-        const userEmail = localStorage.getItem('userEmail') || null;
-        // attach customer email for remote indexing
-        if (userEmail) purchase.customerEmail = userEmail;
-
-        // Try saving to Firebase if available
-        if (window.__firebase && typeof window.__firebase.addOrder === 'function') {
-            try {
-                const remote = await window.__firebase.addOrder(purchase);
-                // also keep a local copy for offline
-                const savedPurchases = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                savedPurchases.unshift(Object.assign({ _remoteId: remote.id }, purchase));
-                localStorage.setItem(storageKey, JSON.stringify(savedPurchases));
-                return remote;
-            } catch (err) {
-                console.warn('Firebase save failed, falling back to localStorage', err);
-            }
-        }
-
         const savedPurchases = JSON.parse(localStorage.getItem(storageKey) || '[]');
         savedPurchases.unshift(purchase);
         localStorage.setItem(storageKey, JSON.stringify(savedPurchases));
-        return purchase;
     }
 
     function showDownloadMessage() {
@@ -229,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         invoiceResultView.classList.remove('hidden');
     }
 
-    async function simulatePayment() {
+    function simulatePayment() {
         const payText = payBtn.querySelector('.pay-text');
         const spinner = payBtn.querySelector('.spinner');
 
@@ -237,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         spinner.classList.remove('hidden');
         payBtn.disabled = true;
 
-        setTimeout(async () => {
+        setTimeout(() => {
             const { cart, total } = getCartData();
             const customer = getCustomerData();
             const orderNumber = `#RS${Date.now().toString().slice(-6)}`;
@@ -246,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 timeStyle: 'short',
             }).format(new Date());
             latestOrder = { orderNumber, orderDate, cart, subtotal: getCartData().subtotal, discountAmount: getCartData().discountAmount, total };
-            await savePurchase({
+            savePurchase({
                 id: orderNumber,
                 date: orderDate,
                 status: 'Procesando',

@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const userEmail = localStorage.getItem('userEmail') || '';
+    const userRole = localStorage.getItem('userRole') || '';
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === '1' || Boolean(userEmail);
+
+    if (!isLoggedIn || (userRole !== 'admin' && !userEmail.toLowerCase().includes('admin'))) {
+        window.location.href = 'login.html';
+        return;
+    }
+
     const sidebar = document.getElementById('adminSidebar');
     const sidebarToggle = document.getElementById('sidebarToggle');
     const mobileSidebarToggle = document.getElementById('mobileSidebarToggle');
@@ -64,11 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const promotionEditModalClose = document.getElementById('promotionEditModalClose');
     const promotionEditForm = document.getElementById('promotionEditForm');
     const promotionEditCancel = document.getElementById('promotionEditCancel');
-    const crmRefreshBtn = document.getElementById('crmRefreshBtn');
-    const crmCreateTestBtn = document.getElementById('crmCreateTestBtn');
-    const crmListConsoleBtn = document.getElementById('crmListConsoleBtn');
-    const crmClientIdInput = document.getElementById('crmClientIdInput');
-    const crmDeleteByIdBtn = document.getElementById('crmDeleteByIdBtn');
     let itemToDelete = null;
     let editingPromoId = null;
     let currentOrder = null;
@@ -136,50 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: '#129', client: 'Paula M.', status: 'Pendiente', total: 188, date: '05/07', items: ['Luz Frontal PRO'] }
     ];
 
-    const userEmail = localStorage.getItem('userEmail') || 'admin@ruta.com';
     if (adminNameLabel) {
         adminNameLabel.textContent = userEmail;
     }
-
-    // Remote CRM API base (optional). If you run the local proxy, set this.
-    const CRM_API_BASE = localStorage.getItem('crmApiBase') || '';
-    const CRM_API_KEY = localStorage.getItem('crmApiKey') || '';
-
-    async function fetchRemoteClients() {
-        if (!CRM_API_BASE || !CRM_API_KEY) return null;
-        try {
-            const res = await fetch(`${CRM_API_BASE.replace(/\/$/, '')}/api/clientes?api_key=${encodeURIComponent(CRM_API_KEY)}`);
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            return await res.json();
-        } catch (err) {
-            console.warn('fetchRemoteClients failed', err);
-            return null;
-        }
-    }
-
-    // Try to load remote clients (if configured) at startup
-    (async () => {
-        // Prefer direct Firebase client API when available
-        if (window.__firebase && typeof window.__firebase.getClients === 'function') {
-            try {
-                const remote = await window.__firebase.getClients();
-                if (Array.isArray(remote) && remote.length) {
-                    clients = remote.map(c => ({ id: c.id, name: c.nombre || c.name || '', email: c.correo || c.email || '', phone: c.telefono || c.phone || '', issue: c.issue || '', status: c.estado || 'Pendiente' }));
-                    renderClients();
-                    return;
-                }
-            } catch (err) {
-                console.warn('window.__firebase.getClients failed', err);
-            }
-        }
-
-        // Fallback: try proxy server if configured
-        const remote = await fetchRemoteClients();
-        if (Array.isArray(remote) && remote.length) {
-            clients = remote.map(c => ({ id: c.id, name: c.nombre || c.name, email: c.correo || c.email, phone: c.telefono || c.phone, issue: c.issue || '', status: c.estado || 'Pendiente' }));
-            renderClients();
-        }
-    })();
 
     // Helper to get initials from a name
     function getInitials(name) {
@@ -216,7 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
             pedidos: 'Pedidos',
             promociones: 'Promociones',
             clientes: 'Clientes',
-            reportes: 'Reportes'
+            reportes: 'Reportes',
+            crm: 'Gestión CRM',
+            interacciones: 'Interacciones',
+            'dashboard-crm': 'Dashboard CRM',
+            'mi-actividad': 'Mi Actividad'
         };
 
         if (pageTitle) {
@@ -335,7 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="client-card-actions">
                             <button class="btn-client-action" type="button" data-action="view-client" data-id="${client.id}"><i class="bi bi-eye"></i> Ver</button>
                             <button class="btn-client-action" type="button" data-action="edit-client" data-id="${client.id}"><i class="bi bi-pencil"></i> Editar</button>
-                            <button class="btn-client-action" type="button" data-action="delete-client" data-id="${client.id}"><i class="bi bi-trash"></i> Eliminar</button>
                         </div>
                     </article>
                 `).join('')}
@@ -657,39 +623,18 @@ document.addEventListener('DOMContentLoaded', () => {
         clientForm.addEventListener('submit', (event) => {
             event.preventDefault();
             const formData = new FormData(clientForm);
-            const payload = {
-                nombre: formData.get('name').toString().trim(),
-                correo: formData.get('email').toString().trim(),
-                telefono: formData.get('phone').toString().trim(),
+            clients.unshift({
+                id: Date.now(),
+                name: formData.get('name').toString().trim(),
+                email: formData.get('email').toString().trim(),
+                phone: formData.get('phone').toString().trim(),
                 issue: formData.get('issue').toString().trim(),
-                estado: formData.get('status').toString()
-            };
-            // If Firebase client API available, use it
-            if (window.__firebase && typeof window.__firebase.addClient === 'function') {
-                window.__firebase.addClient(payload).then(created => {
-                    clients.unshift({ id: created.id, name: created.nombre || payload.nombre, email: created.correo || payload.correo, phone: created.telefono || payload.telefono, issue: payload.issue, status: created.estado || payload.estado });
-                    clientForm.reset();
-                    clientPage = 1;
-                    renderClients();
-                    showFeedback('Cliente registrado en Firebase.', 'success');
-                }).catch(err => {
-                    console.error(err);
-                    showFeedback('Error al crear cliente en Firebase.', 'error');
-                });
-            } else {
-                clients.unshift({
-                    id: Date.now(),
-                    name: payload.nombre,
-                    email: payload.correo,
-                    phone: payload.telefono,
-                    issue: payload.issue,
-                    status: payload.estado
-                });
-                clientForm.reset();
-                clientPage = 1;
-                renderClients();
-                showFeedback('Cliente registrado localmente.', 'success');
-            }
+                status: formData.get('status').toString()
+            });
+            clientForm.reset();
+            clientPage = 1;
+            renderClients();
+            showFeedback('Cliente registrado con éxito.', 'success');
         });
     }
 
@@ -781,33 +726,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const clientActionBtn = event.target.closest('[data-action="view-client"], [data-action="edit-client"]');
             if (clientActionBtn) {
-                const id = clientActionBtn.dataset.id;
-                const client = clients.find(c => String(c.id) === String(id));
+                const id = Number(clientActionBtn.dataset.id);
+                const client = clients.find(c => c.id === id);
                 if (client) openClientModal(client);
                 return;
-            }
-
-            const deleteBtn = event.target.closest('[data-action="delete-client"]');
-            if (deleteBtn) {
-                const id = deleteBtn.dataset.id;
-                const client = clients.find(c => String(c.id) === String(id));
-                if (!client) return;
-                if (!confirm(`Eliminar cliente ${client.name}?`)) return;
-                // Try remote delete
-                if (window.__firebase && typeof window.__firebase.deleteClient === 'function') {
-                    window.__firebase.deleteClient(client.id).then(() => {
-                        clients = clients.filter(c => c.id !== id);
-                        renderClients();
-                        showFeedback('Cliente eliminado de Firebase.', 'success');
-                    }).catch(err => {
-                        console.error(err);
-                        showFeedback('Error al eliminar cliente en Firebase.', 'error');
-                    });
-                } else {
-                    clients = clients.filter(c => c.id !== id);
-                    renderClients();
-                    showFeedback('Cliente eliminado localmente.', 'success');
-                }
             }
 
             // The 'Editar' button now opens the modal.
@@ -888,111 +810,20 @@ document.addEventListener('DOMContentLoaded', () => {
     clientModalBackdrop?.addEventListener('click', closeClientModal);
     clientModalCancel?.addEventListener('click', closeClientModal);
 
-    // CRM quick controls
-    crmRefreshBtn?.addEventListener('click', async () => {
-        if (window.__firebase && typeof window.__firebase.getClients === 'function') {
-            showFeedback('Cargando clientes desde Firebase...');
-            try {
-                const remote = await window.__firebase.getClients();
-                clients = remote.map(c => ({ id: c.id, name: c.nombre || c.name || '', email: c.correo || c.email || '', phone: c.telefono || c.phone || '', issue: c.issue || '', status: c.estado || 'Pendiente' }));
-                clientPage = 1;
-                renderClients();
-                showFeedback('Clientes cargados desde Firebase.', 'success');
-            } catch (err) {
-                console.error(err);
-                showFeedback('Error al cargar clientes desde Firebase.', 'error');
-            }
-        } else {
-            showFeedback('API de Firebase no disponible.', 'error');
-        }
-    });
-
-    crmCreateTestBtn?.addEventListener('click', async () => {
-        if (window.__firebase && typeof window.__firebase.addClient === 'function') {
-            const timestamp = Date.now();
-            const payload = { nombre: `Prueba ${timestamp}`, correo: `prueba+${timestamp}@example.com`, telefono: '0000000000', empresa: 'TestCo', estado: 'activo' };
-            try {
-                const created = await window.__firebase.addClient(payload);
-                clients.unshift({ id: created.id, name: created.nombre || payload.nombre, email: created.correo || payload.correo, phone: created.telefono || payload.telefono, issue: '', status: created.estado || payload.estado });
-                clientPage = 1;
-                renderClients();
-                showFeedback('Cliente de prueba creado en Firebase.', 'success');
-            } catch (err) {
-                console.error(err);
-                showFeedback('Error al crear cliente de prueba.', 'error');
-            }
-        } else {
-            showFeedback('API de Firebase no disponible.', 'error');
-        }
-    });
-
-    crmListConsoleBtn?.addEventListener('click', async () => {
-        if (window.__firebase && typeof window.__firebase.getClients === 'function') {
-            try {
-                const remote = await window.__firebase.getClients();
-                console.log('Clientes desde Firebase:', remote);
-                showFeedback('Clientes listados en la consola.', 'success');
-            } catch (err) {
-                console.error(err);
-                showFeedback('Error al listar clientes.', 'error');
-            }
-        } else {
-            showFeedback('API de Firebase no disponible.', 'error');
-        }
-    });
-
-    crmDeleteByIdBtn?.addEventListener('click', async () => {
-        const id = crmClientIdInput?.value?.trim();
-        if (!id) { showFeedback('Proporciona un ID de cliente.', 'error'); return; }
-        if (!confirm(`Eliminar cliente con ID ${id}?`)) return;
-        if (window.__firebase && typeof window.__firebase.deleteClient === 'function') {
-            try {
-                await window.__firebase.deleteClient(id);
-                clients = clients.filter(c => String(c.id) !== String(id));
-                renderClients();
-                showFeedback('Cliente eliminado en Firebase.', 'success');
-            } catch (err) {
-                console.error(err);
-                showFeedback('Error al eliminar cliente.', 'error');
-            }
-        } else {
-            showFeedback('API de Firebase no disponible.', 'error');
-        }
-    });
-
     clientModalSave?.addEventListener('click', () => {
-        const id = clientModal.dataset.clientId;
+        const id = Number(clientModal.dataset.clientId);
         if (!id) return;
-        const updatedPayload = {
-            nombre: clientModalName.value.trim(),
-            correo: clientModalEmail.value.trim(),
-            telefono: clientModalPhone.value.trim(),
+        clients = clients.map(c => c.id === id ? {
+            ...c,
+            name: clientModalName.value.trim(),
+            email: clientModalEmail.value.trim(),
+            phone: clientModalPhone.value.trim(),
             issue: clientModalIssue.value.trim(),
-            estado: clientModalStatus.value
-        };
-        if (window.__firebase && typeof window.__firebase.updateClient === 'function') {
-            window.__firebase.updateClient(id, updatedPayload).then(updated => {
-                clients = clients.map(c => String(c.id) === String(id) ? { id: updated.id, name: updated.nombre || updated.name || clientModalName.value.trim(), email: updated.correo || updated.email || clientModalEmail.value.trim(), phone: updated.telefono || updated.phone || clientModalPhone.value.trim(), issue: updated.issue || clientModalIssue.value.trim(), status: updated.estado || clientModalStatus.value } : c);
-                renderClients();
-                closeClientModal();
-                showFeedback('Cliente actualizado en Firebase.', 'success');
-            }).catch(err => {
-                console.error(err);
-                showFeedback('Error al actualizar cliente en Firebase.', 'error');
-            });
-        } else {
-            clients = clients.map(c => c.id === Number(id) ? {
-                ...c,
-                name: clientModalName.value.trim(),
-                email: clientModalEmail.value.trim(),
-                phone: clientModalPhone.value.trim(),
-                issue: clientModalIssue.value.trim(),
-                status: clientModalStatus.value
-            } : c);
-            renderClients();
-            closeClientModal();
-            showFeedback('Actualizado Correctamente', 'success');
-        }
+            status: clientModalStatus.value
+        } : c);
+        renderClients();
+        closeClientModal();
+        showFeedback('Actualizado Correctamente', 'success');
     });
 
     document.querySelectorAll('.action-btn').forEach(button => {

@@ -31,6 +31,12 @@
                 <button type="button" class="nav-link" data-view="promociones"><i class="bi bi-percent"></i><span>Promociones</span></button>
                 <button type="button" class="nav-link" data-view="clientes"><i class="bi bi-people"></i><span>Clientes</span></button>
                 <button type="button" class="nav-link" data-view="reportes"><i class="bi bi-bar-chart"></i><span>Reportes</span></button>
+                <div class="sidebar-divider"></div>
+                <p class="sidebar-section-label">CRM</p>
+                <button type="button" class="nav-link" data-view="crm"><i class="bi bi-person-rolodex"></i><span>Gestión CRM</span></button>
+                <button type="button" class="nav-link" data-view="interacciones"><i class="bi bi-chat-dots"></i><span>Interacciones</span></button>
+                <button type="button" class="nav-link" data-view="dashboard-crm"><i class="bi bi-graph-up"></i><span>Dashboard CRM</span></button>
+                <button type="button" class="nav-link" data-view="mi-actividad"><i class="bi bi-person-badge"></i><span>Mi Actividad</span></button>
             </nav>
 
             <div class="sidebar-footer">
@@ -316,21 +322,6 @@
 
             <section id="view-clientes" class="view-section">
                 <section class="panel-grid clients-layout">
-                    <div class="panel-card crm-controls">
-                        <div class="panel-head">
-                            <h3>Controles CRM (Firestore)</h3>
-                            <p>Operaciones rápidas para probar CRUD en la colección <strong>clientes</strong>.</p>
-                        </div>
-                        <div class="crm-actions">
-                            <button id="crmRefreshBtn" class="btn btn-outline" type="button">Refrescar desde Firebase</button>
-                            <button id="crmCreateTestBtn" class="btn btn-primary" type="button">Crear cliente prueba</button>
-                            <button id="crmListConsoleBtn" class="btn btn-secondary" type="button">Listar en consola</button>
-                            <div class="crm-delete-row">
-                                <input id="crmClientIdInput" type="text" placeholder="ID cliente (para eliminar)" />
-                                <button id="crmDeleteByIdBtn" class="btn btn-outline" type="button">Eliminar por ID</button>
-                            </div>
-                        </div>
-                    </div>
                     <div class="panel-card">
                         <div class="panel-head">
                             <h3>Alta de clientes</h3>
@@ -424,6 +415,222 @@
                     </div>
                 </section>
             </section>
+
+            <!-- ========== CRM: Gestión de Clientes ========== -->
+            <section id="view-crm" class="view-section">
+                <section class="filters-card">
+                    <div class="filter-group">
+                        <label for="crmSearchInput">Buscar cliente</label>
+                        <input id="crmSearchInput" type="text" placeholder="Nombre, correo o empresa" />
+                    </div>
+                    <div class="filter-group">
+                        <label for="crmFilterStatus">Estado</label>
+                        <select id="crmFilterStatus">
+                            <option value="">Todos</option>
+                            <option value="activo">Activo</option>
+                            <option value="inactivo">Inactivo</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="crmFilterEtapa">Etapa CRM</label>
+                        <select id="crmFilterEtapa">
+                            <option value="">Todas</option>
+                            <option value="Prospecto">Prospecto</option>
+                            <option value="Activo">Activo</option>
+                            <option value="Frecuente">Frecuente</option>
+                            <option value="Inactivo">Inactivo</option>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="panel-grid crm-layout">
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h3>Clientes CRM</h3>
+                            <p>Datos en tiempo real desde Firestore</p>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Correo</th>
+                                        <th>Teléfono</th>
+                                        <th>Empresa</th>
+                                        <th>Estado</th>
+                                        <th>Etapa CRM</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="crmClientsTableBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="crmClientsPagination" class="pagination-row"></div>
+                    </div>
+
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h3 id="crmClientFormTitle">Alta de cliente CRM</h3>
+                            <p>Gestión centralizada</p>
+                        </div>
+                        <form id="crmClientForm" class="product-form">
+                            <div class="field-group">
+                                <label for="crmClientName">Nombre completo</label>
+                                <input id="crmClientName" name="nombre" type="text" required />
+                            </div>
+                            <div class="field-group">
+                                <label for="crmClientEmail">Correo electrónico</label>
+                                <input id="crmClientEmail" name="correo" type="email" required />
+                            </div>
+                            <div class="field-group">
+                                <label for="crmClientPhone">Teléfono</label>
+                                <input id="crmClientPhone" name="telefono" type="tel" />
+                            </div>
+                            <div class="field-group">
+                                <label for="crmClientCompany">Empresa</label>
+                                <input id="crmClientCompany" name="empresa" type="text" />
+                            </div>
+                            <div class="field-group">
+                                <label for="crmClientStatus">Estado</label>
+                                <select id="crmClientStatus" name="estado">
+                                    <option value="activo">Activo</option>
+                                    <option value="inactivo">Inactivo</option>
+                                </select>
+                            </div>
+                            <div class="field-group">
+                                <label for="crmClientEtapa">Etapa CRM</label>
+                                <select id="crmClientEtapa" name="etapa_crm">
+                                    <option value="Prospecto">Prospecto</option>
+                                    <option value="Activo">Activo</option>
+                                    <option value="Frecuente">Frecuente</option>
+                                    <option value="Inactivo">Inactivo</option>
+                                </select>
+                            </div>
+                            <div class="form-actions">
+                                <button id="crmClientFormSubmitBtn" class="btn btn-primary" type="submit">Dar de alta</button>
+                                <button id="crmClientFormCancelBtn" class="btn btn-outline" type="button">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== CRM: Interacciones ========== -->
+            <section id="view-interacciones" class="view-section">
+                <section class="panel-grid interacciones-layout">
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h3>Registrar interacción</h3>
+                            <p>Seguimiento centralizado</p>
+                        </div>
+                        <div class="field-group" style="margin-bottom: 1rem;">
+                            <label for="interClientSelect">Seleccionar cliente</label>
+                            <select id="interClientSelect">
+                                <option value="">— Elige un cliente —</option>
+                            </select>
+                        </div>
+                        <div id="interClientInfo" class="crm-client-info-card" style="display:none;"></div>
+                        <form id="interForm" class="product-form" style="margin-top: 1rem;">
+                            <div class="field-group">
+                                <label for="interTipo">Tipo de interacción</label>
+                                <select id="interTipo" name="tipo" required>
+                                    <option value="llamada">📞 Llamada</option>
+                                    <option value="correo">📧 Correo</option>
+                                    <option value="reunion">📹 Reunión</option>
+                                </select>
+                            </div>
+                            <div class="field-group">
+                                <label for="interDescripcion">Descripción</label>
+                                <textarea id="interDescripcion" name="descripcion" rows="3" required placeholder="Detalles de la interacción..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" type="submit">Registrar interacción</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h3>Historial de interacciones</h3>
+                            <p>Línea de tiempo</p>
+                        </div>
+                        <div id="interTimeline" class="crm-timeline">
+                            <p class="text-center text-gray-400" style="padding: 2rem;">Selecciona un cliente para ver su historial.</p>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- ========== CRM: Dashboard / Métricas ========== -->
+            <section id="view-dashboard-crm" class="view-section">
+                <section class="stats-grid compact">
+                    <article class="stat-card">
+                        <p>Total de clientes</p>
+                        <h3 id="crmTotalClientes">0</h3>
+                        <span>En el sistema</span>
+                    </article>
+                    <article class="stat-card">
+                        <p>Clientes activos</p>
+                        <h3 id="crmClientesActivos">0</h3>
+                        <span>Estado activo</span>
+                    </article>
+                    <article class="stat-card">
+                        <p>Clientes inactivos</p>
+                        <h3 id="crmClientesInactivos">0</h3>
+                        <span>Estado inactivo</span>
+                    </article>
+                    <article class="stat-card">
+                        <p>Total interacciones</p>
+                        <h3 id="crmTotalInteracciones">0</h3>
+                        <span>Registradas</span>
+                    </article>
+                </section>
+
+                <section class="panel-grid">
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h3>Distribución por etapa CRM</h3>
+                        </div>
+                        <div id="crmChartEtapas" class="crm-chart-bars"></div>
+                    </div>
+                    <div class="panel-card">
+                        <div class="panel-head">
+                            <h3>Tipos de interacción</h3>
+                        </div>
+                        <div id="crmChartTipos" class="crm-chart-pie-container"></div>
+                    </div>
+                </section>
+
+                <section class="panel-card" style="margin-top: 1rem;">
+                    <div class="panel-head">
+                        <h3>⚠️ Clientes en riesgo</h3>
+                        <p>Sin interacción en los últimos 30 días</p>
+                    </div>
+                    <div id="crmClientesEnRiesgo" class="crm-risk-list"></div>
+                </section>
+            </section>
+
+            <!-- ========== CRM: Mi Actividad ========== -->
+            <section id="view-mi-actividad" class="view-section">
+                <div class="hero-card" style="margin-bottom: 1rem;">
+                    <div>
+                        <p class="eyebrow">Actividad personal</p>
+                        <h3>Hola, <span id="miActividadUserName">Administrador</span></h3>
+                        <p>Has registrado <strong id="miActividadCount">0</strong> interacciones.</p>
+                    </div>
+                </div>
+                <section class="panel-card">
+                    <div class="panel-head">
+                        <h3>Mis interacciones recientes</h3>
+                        <p>Ordenadas por fecha</p>
+                    </div>
+                    <div id="miActividadList" class="crm-activity-list">
+                        <p class="text-center text-gray-400" style="padding: 2rem;">Cargando actividad...</p>
+                    </div>
+                    <div id="miActividadPagination" class="pagination-row"></div>
+                </section>
+            </section>
+
         </main>
     </div>
 
@@ -574,8 +781,8 @@
         </div>
     </div>
 
-    <script type="module" src="js/firebase-init.js"></script>
     <script src="js/admin.js"></script>
+    <script src="js/crm.js"></script>
     <script>
         // This script is added to handle form validation since admin.js is not provided for modification.
         document.addEventListener('DOMContentLoaded', () => {
