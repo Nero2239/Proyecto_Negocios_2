@@ -183,7 +183,8 @@ document.addEventListener('DOMContentLoaded', () => {
             crm: 'Gestión CRM',
             interacciones: 'Interacciones',
             'dashboard-crm': 'Dashboard CRM',
-            'mi-actividad': 'Mi Actividad'
+            'mi-actividad': 'Mi Actividad',
+            usuarios: 'Usuarios y permisos'
         };
 
         if (pageTitle) {

@@ -66,16 +66,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (loginForm) {
-        loginForm.addEventListener('submit', function (event) {
+        loginForm.addEventListener('submit', async function (event) {
             event.preventDefault();
             const email = document.getElementById('loginEmail').value.trim() || 'usuario@ruta.com';
             const password = document.getElementById('loginPassword').value.trim() || '123456';
             const displayName = email.split('@')[0];
             const remember = document.getElementById('rememberCheck').checked;
 
+            let registeredRole = '';
+            let registeredName = '';
+            try {
+                const { getFirestore, collection, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+                const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+                const firebaseConfig = {
+                    apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
+                    authDomain: 'camping-3a6a4.firebaseapp.com',
+                    projectId: 'camping-3a6a4',
+                    storageBucket: 'camping-3a6a4.firebasestorage.app',
+                    messagingSenderId: '181839243079',
+                    appId: '1:181839243079:web:df39441f32098fc7ca4e62'
+                };
+                const loginApp = initializeApp(firebaseConfig, 'loginLookup');
+                const userQuery = query(collection(getFirestore(loginApp), 'usuarios'), where('email', '==', email.toLowerCase()));
+                const userSnapshot = await getDocs(userQuery);
+                if (!userSnapshot.empty) {
+                    const userData = userSnapshot.docs.map(userDoc => userDoc.data());
+                    const adminUser = userData.find(user => user.rol === 'admin');
+                    registeredRole = adminUser ? 'admin' : (userData[0].rol || '');
+                    registeredName = (adminUser || userData[0]).nombre || '';
+                }
+            } catch (error) {
+                console.warn('No se pudo consultar el rol en Firestore:', error);
+            }
+
             sessionStorage.setItem('lastEmail', email);
             localStorage.setItem('userEmail', email);
-            localStorage.setItem('userName', displayName);
+            localStorage.setItem('userName', registeredName || displayName);
             localStorage.setItem('isLoggedIn', '1');
             if (remember) {
                 localStorage.setItem('rememberUser', '1');
@@ -83,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('rememberUser', '0');
             }
 
-            const isAdminAccount = email.toLowerCase().includes('admin');
+            const isAdminAccount = registeredRole === 'admin' || email.toLowerCase().includes('admin');
             const userRole = isAdminAccount ? 'admin' : 'user';
             localStorage.setItem('userRole', userRole);
 
@@ -95,16 +121,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (registerForm) {
-        registerForm.addEventListener('submit', function (event) {
+        registerForm.addEventListener('submit', async function (event) {
             event.preventDefault();
             const email = document.getElementById('registerEmail').value.trim() || 'nuevo@ruta.com';
             const name = document.getElementById('registerName').value.trim() || 'Usuario';
             const password = document.getElementById('registerPassword').value.trim() || '123456';
 
+            try {
+                const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+                const { getFirestore, collection, addDoc, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+                const registrationApp = initializeApp({
+                    apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
+                    authDomain: 'camping-3a6a4.firebaseapp.com',
+                    projectId: 'camping-3a6a4',
+                    storageBucket: 'camping-3a6a4.firebasestorage.app',
+                    messagingSenderId: '181839243079',
+                    appId: '1:181839243079:web:df39441f32098fc7ca4e62'
+                }, 'registrationLookup');
+                const registrationDb = getFirestore(registrationApp);
+                const existingUsers = await getDocs(query(collection(registrationDb, 'usuarios'), where('email', '==', email.toLowerCase())));
+
+                if (existingUsers.empty) {
+                    await addDoc(collection(registrationDb, 'usuarios'), {
+                        email: email.toLowerCase(),
+                        nombre: name,
+                        rol: 'usuario',
+                        ultimo_acceso: new Date().toISOString()
+                    });
+                }
+
+                const existingClients = await getDocs(query(collection(registrationDb, 'clientes'), where('correo', '==', email.toLowerCase())));
+                if (existingClients.empty) {
+                    await addDoc(collection(registrationDb, 'clientes'), {
+                        nombre: name,
+                        correo: email.toLowerCase(),
+                        telefono: '',
+                        empresa: '',
+                        estado: 'activo',
+                        etapa_crm: 'Prospecto',
+                        fecha_registro: new Date().toISOString()
+                    });
+                }
+            } catch (error) {
+                console.warn('No se pudo guardar la cuenta en CRM:', error);
+            }
+
             localStorage.setItem('userEmail', email);
             localStorage.setItem('userName', name);
             localStorage.setItem('isLoggedIn', '1');
             localStorage.setItem('rememberUser', '1');
+            localStorage.setItem('userRole', 'user');
             showLoginForm();
             showMessage('Registrado correctamente.', 'success', true);
             registerForm.reset();

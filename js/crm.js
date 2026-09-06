@@ -68,6 +68,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 await deleteDoc(doc(db, 'clientes', id));
             }
 
+            async function getUsuarios() {
+                const snapshot = await getDocs(collection(db, 'usuarios'));
+                return snapshot.docs.map(userDoc => ({ id: userDoc.id, ...userDoc.data() }));
+            }
+
+            async function saveUsuario(id, data) {
+                if (id) {
+                    await updateDoc(doc(db, 'usuarios', id), data);
+                    return id;
+                }
+                const userRef = await addDoc(collection(db, 'usuarios'), data);
+                return userRef.id;
+            }
+
+            async function deleteUsuario(id) {
+                await deleteDoc(doc(db, 'usuarios', id));
+            }
+
+            async function ensureUserClient(data) {
+                const clientQuery = query(collection(db, 'clientes'), where('correo', '==', data.email));
+                const clientSnapshot = await getDocs(clientQuery);
+                if (clientSnapshot.empty) {
+                    await addDoc(collection(db, 'clientes'), {
+                        nombre: data.nombre,
+                        correo: data.email,
+                        telefono: '',
+                        empresa: '',
+                        estado: 'activo',
+                        etapa_crm: 'Prospecto',
+                        fecha_registro: new Date().toISOString()
+                    });
+                }
+            }
+
+            async function syncUsersAsClients() {
+                const users = await getUsuarios();
+                for (const user of users) {
+                    if (user.rol !== 'admin' && user.email && user.nombre) {
+                        await ensureUserClient({ email: user.email.toLowerCase(), nombre: user.nombre });
+                    }
+                }
+            }
+
             async function updateEtapaCRM(id, etapa) {
                 await updateDoc(doc(db, 'clientes', id), { etapa_crm: etapa });
             }
@@ -159,6 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
             let editingClientId = null;
             let currentClientDetailId = null;
             let clientToDelete = null;
+            let currentUsers = [];
+            let editingUserId = null;
+            let userToDelete = null;
+            let pendingSave = null;
 
             // Elementos del DOM (CRM View)
             const crmClientForm = document.getElementById('crmClientForm');
@@ -199,10 +246,40 @@ document.addEventListener('DOMContentLoaded', () => {
             const miActividadUserName = document.getElementById('miActividadUserName');
             const miActividadCount = document.getElementById('miActividadCount');
             const miActividadPagination = document.getElementById('miActividadPagination');
+            const openCrmClientModal = document.getElementById('openCrmClientModal');
+            const openInteractionModal = document.getElementById('openInteractionModal');
+            const interactionModal = document.getElementById('interactionModal');
+            const interactionModalClose = document.getElementById('interactionModalClose');
+            const interactionModalCancel = document.getElementById('interactionModalCancel');
+            const interactionModalBackdrop = document.getElementById('interactionModalBackdrop');
+            const crmClientModal = document.getElementById('crmClientModal');
+            const crmClientModalClose = document.getElementById('crmClientModalClose');
+            const crmClientModalBackdrop = document.getElementById('crmClientModalBackdrop');
+            const usersTableBody = document.getElementById('usersTableBody');
+            const usersPagination = document.getElementById('usersPagination');
+            const openUserModal = document.getElementById('openUserModal');
+            const userModal = document.getElementById('userModal');
+            const userModalClose = document.getElementById('userModalClose');
+            const userModalCancel = document.getElementById('userModalCancel');
+            const userModalBackdrop = document.getElementById('userModalBackdrop');
+            const userForm = document.getElementById('userForm');
+            const userNameInput = document.getElementById('userNameInput');
+            const userEmailInput = document.getElementById('userEmailInput');
+            const userRoleInput = document.getElementById('userRoleInput');
+            const userModalTitle = document.getElementById('userModalTitle');
+            const saveConfirmModal = document.getElementById('saveConfirmModal');
+            const saveConfirmText = document.getElementById('saveConfirmText');
+            const saveConfirmAccept = document.getElementById('saveConfirmAccept');
+            const saveConfirmCancel = document.getElementById('saveConfirmCancel');
+            const userDeleteModal = document.getElementById('userDeleteModal');
+            const userDeleteText = document.getElementById('userDeleteText');
+            const userDeleteAccept = document.getElementById('userDeleteAccept');
+            const userDeleteCancel = document.getElementById('userDeleteCancel');
 
             const crmItemsPerPage = 5;
             let crmClientPage = 1;
             let miActividadPage = 1;
+            let usersPage = 1;
 
             // Modal Detail
             const crmClientDetailModal = document.getElementById('crmClientDetailModal');
@@ -243,6 +320,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="page-indicator">Página ${currentPage} / ${totalPages}</span>
                     <button class="page-btn" type="button" data-${pageAttribute}="next" ${currentPage === totalPages ? 'disabled' : ''}>Siguiente</button>
                 `;
+            }
+
+            function closeModal(modal) {
+                modal?.classList.add('hidden');
+            }
+
+            function openModal(modal) {
+                modal?.classList.remove('hidden');
+            }
+
+            function askToSave(text, callback) {
+                pendingSave = callback;
+                if (saveConfirmText) saveConfirmText.textContent = text;
+                openModal(saveConfirmModal);
+            }
+
+            async function renderUsers() {
+                if (!usersTableBody) return;
+                try {
+                    currentUsers = await getUsuarios();
+                    const totalPages = Math.max(1, Math.ceil(currentUsers.length / crmItemsPerPage));
+                    usersPage = Math.min(usersPage, totalPages);
+                    const visibleUsers = currentUsers.slice((usersPage - 1) * crmItemsPerPage, usersPage * crmItemsPerPage);
+                    usersTableBody.innerHTML = visibleUsers.length ? visibleUsers.map(user => `
+                        <tr>
+                            <td>${user.nombre || 'Sin nombre'}</td>
+                            <td>${user.email || '—'}</td>
+                            <td><span class="role-badge ${user.rol === 'admin' ? 'role-admin' : 'role-user'}">${user.rol === 'admin' ? 'Administrador' : 'Usuario'}</span></td>
+                            <td>${user.ultimo_acceso ? new Date(user.ultimo_acceso).toLocaleDateString() : 'Sin registro'}</td>
+                            <td><button class="btn btn-sm btn-primary btn-edit-user" data-id="${user.id}" type="button" title="Editar usuario"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-danger btn-delete-user" data-id="${user.id}" type="button" title="Eliminar usuario"><i class="bi bi-trash"></i></button></td>
+                        </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No hay usuarios registrados.</td></tr>';
+                    renderPagination(usersPagination, usersPage, totalPages, 'users-page');
+                } catch (error) {
+                    console.error('Error renderUsers:', error);
+                    showCRMFeedback('No se pudieron cargar los usuarios.', 'error');
+                }
             }
 
             async function renderCRMClients() {
@@ -531,26 +644,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         estado: crmClientStatus.value,
                         etapa_crm: crmClientEtapa.value
                     };
-
-                    try {
-                        if (editingClientId) {
-                            await updateCliente(editingClientId, data);
-                            showCRMFeedback('Cliente actualizado exitosamente.', 'success');
-                        } else {
-                            data.fecha_registro = new Date().toISOString();
-                            await addCliente(data);
-                            showCRMFeedback('Cliente registrado exitosamente.', 'success');
+                    askToSave(editingClientId ? '¿Deseas guardar los cambios de este cliente?' : '¿Deseas registrar este cliente?', async () => {
+                        try {
+                            if (editingClientId) await updateCliente(editingClientId, data);
+                            else await addCliente({ ...data, fecha_registro: new Date().toISOString() });
+                            showCRMFeedback(editingClientId ? 'Cliente actualizado exitosamente.' : 'Cliente registrado exitosamente.', 'success');
+                            crmClientForm.reset();
+                            editingClientId = null;
+                            closeModal(crmClientModal);
+                            renderCRMClients();
+                        } catch (error) {
+                            console.error(error);
+                            showCRMFeedback('Error al guardar el cliente.', 'error');
                         }
-                        crmClientForm.reset();
-                        editingClientId = null;
-                        if (crmClientFormTitle) crmClientFormTitle.textContent = 'Registrar Nuevo Cliente';
-                        if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Guardar';
-                        if (crmClientFormCancelBtn) crmClientFormCancelBtn.style.display = 'none';
-                        renderCRMClients();
-                    } catch (error) {
-                        console.error(error);
-                        showCRMFeedback('Error al guardar el cliente.', 'error');
-                    }
+                    });
                 });
             }
 
@@ -558,11 +665,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 crmClientFormCancelBtn.addEventListener('click', () => {
                     crmClientForm.reset();
                     editingClientId = null;
-                    if (crmClientFormTitle) crmClientFormTitle.textContent = 'Registrar Nuevo Cliente';
-                    if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Guardar';
-                    crmClientFormCancelBtn.style.display = 'none';
+                    closeModal(crmClientModal);
                 });
             }
+
+            openCrmClientModal?.addEventListener('click', () => {
+                editingClientId = null;
+                crmClientForm?.reset();
+                if (crmClientFormTitle) crmClientFormTitle.textContent = 'Nuevo cliente CRM';
+                if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Guardar cliente';
+                openModal(crmClientModal);
+            });
+            crmClientModalClose?.addEventListener('click', () => closeModal(crmClientModal));
+            crmClientModalBackdrop?.addEventListener('click', () => closeModal(crmClientModal));
 
             // Delegación de eventos en Tabla Clientes
             if (crmClientsTableBody) {
@@ -584,8 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             editingClientId = id;
                             if (crmClientFormTitle) crmClientFormTitle.textContent = 'Editar Cliente';
                             if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Actualizar';
-                            if (crmClientFormCancelBtn) crmClientFormCancelBtn.style.display = 'inline-block';
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                            openModal(crmClientModal);
                         }
                     } else if (btn.classList.contains('btn-delete-client')) {
                         clientToDelete = id;
@@ -659,15 +773,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (crmDetailEtapaBtn) {
                 crmDetailEtapaBtn.addEventListener('click', async () => {
                     if (!currentClientDetailId || !crmDetailEtapaSelect) return;
-                    try {
-                        await updateEtapaCRM(currentClientDetailId, crmDetailEtapaSelect.value);
-                        showCRMFeedback('Etapa actualizada exitosamente.', 'success');
-                        if (crmClientDetailModal) crmClientDetailModal.classList.add('hidden');
-                        renderCRMClients();
-                    } catch (error) {
-                        console.error(error);
-                        showCRMFeedback('Error al actualizar etapa.', 'error');
-                    }
+                    askToSave('¿Deseas guardar la nueva etapa CRM de este cliente?', async () => {
+                        try {
+                            await updateEtapaCRM(currentClientDetailId, crmDetailEtapaSelect.value);
+                            showCRMFeedback('Etapa actualizada exitosamente.', 'success');
+                            closeModal(crmClientDetailModal);
+                            renderCRMClients();
+                        } catch (error) {
+                            console.error(error);
+                            showCRMFeedback('Error al actualizar etapa.', 'error');
+                        }
+                    });
                 });
             }
 
@@ -707,6 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (interClientSelect) {
                 interClientSelect.addEventListener('change', (e) => {
                     const clientId = e.target.value;
+                    if (openInteractionModal) openInteractionModal.disabled = !clientId;
                     if (clientId) {
                         renderInteracciones(clientId);
                     } else {
@@ -739,17 +856,103 @@ document.addEventListener('DOMContentLoaded', () => {
                         usuario_email: userName
                     };
 
-                    try {
-                        await addInteraccion(data);
-                        showCRMFeedback('Interacción registrada exitosamente.', 'success');
-                        interForm.reset();
-                        renderInteracciones(clienteId);
-                    } catch (error) {
-                        console.error(error);
-                        showCRMFeedback('Error al registrar interacción.', 'error');
-                    }
+                    askToSave('¿Deseas guardar esta interacción?', async () => {
+                        try {
+                            await addInteraccion(data);
+                            showCRMFeedback('Interacción registrada exitosamente.', 'success');
+                            interForm.reset();
+                            closeModal(interactionModal);
+                            renderInteracciones(clienteId);
+                        } catch (error) {
+                            console.error(error);
+                            showCRMFeedback('Error al registrar interacción.', 'error');
+                        }
+                    });
                 });
             }
+
+            openInteractionModal?.addEventListener('click', () => openModal(interactionModal));
+            interactionModalClose?.addEventListener('click', () => closeModal(interactionModal));
+            interactionModalCancel?.addEventListener('click', () => closeModal(interactionModal));
+            interactionModalBackdrop?.addEventListener('click', () => closeModal(interactionModal));
+
+            saveConfirmCancel?.addEventListener('click', () => {
+                pendingSave = null;
+                closeModal(saveConfirmModal);
+            });
+            saveConfirmAccept?.addEventListener('click', async () => {
+                const callback = pendingSave;
+                pendingSave = null;
+                closeModal(saveConfirmModal);
+                if (callback) await callback();
+            });
+
+            openUserModal?.addEventListener('click', () => {
+                editingUserId = null;
+                userForm?.reset();
+                if (userModalTitle) userModalTitle.textContent = 'Nuevo usuario';
+                openModal(userModal);
+            });
+            [userModalClose, userModalCancel, userModalBackdrop].forEach(control => control?.addEventListener('click', () => closeModal(userModal)));
+
+            userForm?.addEventListener('submit', event => {
+                event.preventDefault();
+                const data = { nombre: userNameInput.value.trim(), email: userEmailInput.value.trim().toLowerCase(), rol: userRoleInput.value, ultimo_acceso: new Date().toISOString() };
+                askToSave(editingUserId ? '¿Deseas guardar los cambios de este usuario?' : '¿Deseas registrar este usuario?', async () => {
+                    try {
+                        await saveUsuario(editingUserId, data);
+                        await ensureUserClient(data);
+                        showCRMFeedback(editingUserId ? 'Usuario actualizado.' : 'Usuario registrado.', 'success');
+                        closeModal(userModal);
+                        renderUsers();
+                    } catch (error) {
+                        console.error(error);
+                        showCRMFeedback('No se pudo guardar el usuario.', 'error');
+                    }
+                });
+            });
+
+            usersTableBody?.addEventListener('click', event => {
+                const button = event.target.closest('button');
+                if (!button) return;
+                const user = currentUsers.find(item => item.id === button.dataset.id);
+                if (!user) return;
+                if (button.classList.contains('btn-edit-user')) {
+                    editingUserId = user.id;
+                    userNameInput.value = user.nombre || '';
+                    userEmailInput.value = user.email || '';
+                    userRoleInput.value = user.rol || 'usuario';
+                    if (userModalTitle) userModalTitle.textContent = 'Editar usuario y permisos';
+                    openModal(userModal);
+                }
+                if (button.classList.contains('btn-delete-user')) {
+                    userToDelete = user.id;
+                    if (userDeleteText) userDeleteText.textContent = `¿Deseas eliminar a ${user.nombre || user.email}?`;
+                    openModal(userDeleteModal);
+                }
+            });
+
+            usersPagination?.addEventListener('click', event => {
+                const button = event.target.closest('[data-users-page]');
+                if (!button) return;
+                if (button.dataset.usersPage === 'prev' && usersPage > 1) usersPage--;
+                if (button.dataset.usersPage === 'next') usersPage++;
+                renderUsers();
+            });
+            userDeleteCancel?.addEventListener('click', () => { userToDelete = null; closeModal(userDeleteModal); });
+            userDeleteAccept?.addEventListener('click', async () => {
+                if (!userToDelete) return;
+                try {
+                    await deleteUsuario(userToDelete);
+                    showCRMFeedback('Usuario eliminado.', 'success');
+                    renderUsers();
+                } catch (error) {
+                    console.error(error);
+                    showCRMFeedback('No se pudo eliminar el usuario.', 'error');
+                }
+                userToDelete = null;
+                closeModal(userDeleteModal);
+            });
 
             // --- 8. Observer para cambios de vista ---
             const contentContainer = document.querySelector('.content') || document.body;
@@ -758,6 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const interView = document.getElementById('view-interacciones');
                 const dashView = document.getElementById('view-dashboard-crm');
                 const actView = document.getElementById('view-mi-actividad');
+                const usersView = document.getElementById('view-usuarios');
                 
                 if (crmView && crmView.classList.contains('active')) {
                     renderCRMClients();
@@ -771,11 +975,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (actView && actView.classList.contains('active')) {
                     renderMiActividad();
                 }
+                if (usersView && usersView.classList.contains('active')) {
+                    renderUsers();
+                }
             });
             observer.observe(contentContainer, { subtree: true, attributes: true, attributeFilter: ['class'] });
 
             // --- 9. Inicialización ---
             await seedDemoData();
+            await syncUsersAsClients();
             
             // Check initial active view
             if (document.getElementById('view-crm')?.classList.contains('active')) {

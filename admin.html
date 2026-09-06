@@ -25,18 +25,22 @@
             </div>
 
             <nav class="sidebar-nav">
-                <button type="button" class="nav-link active" data-view="dashboard"><i class="bi bi-grid"></i><span>Dashboard</span></button>
+                <p class="sidebar-section-label">General</p>
+                <button type="button" class="nav-link active" data-view="dashboard"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></button>
                 <button type="button" class="nav-link" data-view="productos"><i class="bi bi-box-seam"></i><span>Productos</span></button>
                 <button type="button" class="nav-link" data-view="pedidos"><i class="bi bi-bag-check"></i><span>Pedidos</span></button>
                 <button type="button" class="nav-link" data-view="promociones"><i class="bi bi-percent"></i><span>Promociones</span></button>
                 <button type="button" class="nav-link" data-view="clientes"><i class="bi bi-people"></i><span>Clientes</span></button>
-                <button type="button" class="nav-link" data-view="reportes"><i class="bi bi-bar-chart"></i><span>Reportes</span></button>
+                <button type="button" class="nav-link" data-view="reportes"><i class="bi bi-bar-chart-line"></i><span>Reportes</span></button>
                 <div class="sidebar-divider"></div>
                 <p class="sidebar-section-label">CRM</p>
                 <button type="button" class="nav-link" data-view="crm"><i class="bi bi-person-rolodex"></i><span>Gestión CRM</span></button>
                 <button type="button" class="nav-link" data-view="interacciones"><i class="bi bi-chat-dots"></i><span>Interacciones</span></button>
-                <button type="button" class="nav-link" data-view="dashboard-crm"><i class="bi bi-graph-up"></i><span>Dashboard CRM</span></button>
+                <button type="button" class="nav-link" data-view="dashboard-crm"><i class="bi bi-graph-up-arrow"></i><span>Dashboard CRM</span></button>
                 <button type="button" class="nav-link" data-view="mi-actividad"><i class="bi bi-person-badge"></i><span>Mi Actividad</span></button>
+                <div class="sidebar-divider"></div>
+                <p class="sidebar-section-label">Configuración</p>
+                <button type="button" class="nav-link" data-view="usuarios"><i class="bi bi-person-gear"></i><span>Usuarios</span></button>
             </nav>
 
             <div class="sidebar-footer">
@@ -468,49 +472,12 @@
                         <div id="crmClientsPagination" class="pagination-row"></div>
                     </div>
 
-                    <div class="panel-card">
+                    <div class="panel-card crm-action-panel">
                         <div class="panel-head">
-                            <h3 id="crmClientFormTitle">Alta de cliente CRM</h3>
-                            <p>Gestión centralizada</p>
+                            <h3>Administrar clientes</h3>
+                            <p>Los formularios se abren en una ventana de trabajo.</p>
                         </div>
-                        <form id="crmClientForm" class="product-form">
-                            <div class="field-group">
-                                <label for="crmClientName">Nombre completo</label>
-                                <input id="crmClientName" name="nombre" type="text" required />
-                            </div>
-                            <div class="field-group">
-                                <label for="crmClientEmail">Correo electrónico</label>
-                                <input id="crmClientEmail" name="correo" type="email" required />
-                            </div>
-                            <div class="field-group">
-                                <label for="crmClientPhone">Teléfono</label>
-                                <input id="crmClientPhone" name="telefono" type="tel" />
-                            </div>
-                            <div class="field-group">
-                                <label for="crmClientCompany">Empresa</label>
-                                <input id="crmClientCompany" name="empresa" type="text" />
-                            </div>
-                            <div class="field-group">
-                                <label for="crmClientStatus">Estado</label>
-                                <select id="crmClientStatus" name="estado">
-                                    <option value="activo">Activo</option>
-                                    <option value="inactivo">Inactivo</option>
-                                </select>
-                            </div>
-                            <div class="field-group">
-                                <label for="crmClientEtapa">Etapa CRM</label>
-                                <select id="crmClientEtapa" name="etapa_crm">
-                                    <option value="Prospecto">Prospecto</option>
-                                    <option value="Activo">Activo</option>
-                                    <option value="Frecuente">Frecuente</option>
-                                    <option value="Inactivo">Inactivo</option>
-                                </select>
-                            </div>
-                            <div class="form-actions">
-                                <button id="crmClientFormSubmitBtn" class="btn btn-primary" type="submit">Dar de alta</button>
-                                <button id="crmClientFormCancelBtn" class="btn btn-outline" type="button">Cancelar</button>
-                            </div>
-                        </form>
+                        <button id="openCrmClientModal" class="btn btn-primary" type="button"><i class="bi bi-person-plus"></i> Nuevo cliente</button>
                     </div>
                 </section>
             </section>
@@ -530,23 +497,7 @@
                             </select>
                         </div>
                         <div id="interClientInfo" class="crm-client-info-card" style="display:none;"></div>
-                        <form id="interForm" class="product-form" style="margin-top: 1rem;">
-                            <div class="field-group">
-                                <label for="interTipo">Tipo de interacción</label>
-                                <select id="interTipo" name="tipo" required>
-                                    <option value="llamada">📞 Llamada</option>
-                                    <option value="correo">📧 Correo</option>
-                                    <option value="reunion">📹 Reunión</option>
-                                </select>
-                            </div>
-                            <div class="field-group">
-                                <label for="interDescripcion">Descripción</label>
-                                <textarea id="interDescripcion" name="descripcion" rows="3" required placeholder="Detalles de la interacción..."></textarea>
-                            </div>
-                            <div class="form-actions">
-                                <button class="btn btn-primary" type="submit">Registrar interacción</button>
-                            </div>
-                        </form>
+                        <button id="openInteractionModal" class="btn btn-primary" type="button" disabled><i class="bi bi-plus-circle"></i> Nueva interacción</button>
                     </div>
 
                     <div class="panel-card">
@@ -558,6 +509,25 @@
                             <p class="text-center text-gray-400" style="padding: 2rem;">Selecciona un cliente para ver su historial.</p>
                         </div>
                     </div>
+                </section>
+            </section>
+
+            <section id="view-usuarios" class="view-section">
+                <section class="panel-card">
+                    <div class="panel-head">
+                        <div>
+                            <h3>Usuarios y permisos</h3>
+                            <p>Asigna el rol de administrador a usuarios registrados.</p>
+                        </div>
+                        <button id="openUserModal" class="btn btn-primary" type="button"><i class="bi bi-person-plus"></i> Nuevo usuario</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Usuario</th><th>Correo</th><th>Rol</th><th>Último acceso</th><th>Acciones</th></tr></thead>
+                            <tbody id="usersTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="usersPagination" class="pagination-row"></div>
                 </section>
             </section>
 
@@ -780,6 +750,48 @@
             </div>
         </div>
     </div>
+
+    <div id="crmClientModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="crmClientFormTitle">
+        <div class="modal-backdrop" id="crmClientModalBackdrop"></div>
+        <div class="modal-content max-w-2xl">
+            <button class="modal-close" id="crmClientModalClose" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+            <div class="modal-body">
+                <div class="modal-icon"><i class="bi bi-person-lines-fill"></i></div>
+                <h3 id="crmClientFormTitle">Nuevo cliente CRM</h3>
+                <form id="crmClientForm" class="product-form modal-form">
+                    <div class="modal-form-grid">
+                        <div class="field-group"><label for="crmClientName">Nombre completo</label><input id="crmClientName" name="nombre" type="text" required /></div>
+                        <div class="field-group"><label for="crmClientEmail">Correo electrónico</label><input id="crmClientEmail" name="correo" type="email" required /></div>
+                        <div class="field-group"><label for="crmClientPhone">Teléfono</label><input id="crmClientPhone" name="telefono" type="tel" /></div>
+                        <div class="field-group"><label for="crmClientCompany">Empresa</label><input id="crmClientCompany" name="empresa" type="text" /></div>
+                        <div class="field-group"><label for="crmClientStatus">Estado</label><select id="crmClientStatus" name="estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div>
+                        <div class="field-group"><label for="crmClientEtapa">Etapa CRM</label><select id="crmClientEtapa" name="etapa_crm"><option value="Prospecto">Prospecto</option><option value="Activo">Activo</option><option value="Frecuente">Frecuente</option><option value="Inactivo">Inactivo</option></select></div>
+                    </div>
+                    <div class="form-actions"><button id="crmClientFormCancelBtn" class="btn btn-outline" type="button">Cancelar</button><button id="crmClientFormSubmitBtn" class="btn btn-primary" type="submit">Guardar cliente</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="interactionModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="interactionModalTitle">
+        <div class="modal-backdrop" id="interactionModalBackdrop"></div>
+        <div class="modal-content">
+            <button class="modal-close" id="interactionModalClose" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+            <div class="modal-body"><div class="modal-icon"><i class="bi bi-chat-dots"></i></div><h3 id="interactionModalTitle">Nueva interacción</h3>
+                <form id="interForm" class="product-form modal-form"><div class="field-group"><label for="interTipo">Tipo de interacción</label><select id="interTipo" name="tipo" required><option value="llamada">Llamada</option><option value="correo">Correo</option><option value="reunion">Reunión</option></select></div><div class="field-group"><label for="interDescripcion">Descripción</label><textarea id="interDescripcion" name="descripcion" rows="4" required></textarea></div><div class="form-actions"><button id="interactionModalCancel" class="btn btn-outline" type="button">Cancelar</button><button class="btn btn-primary" type="submit">Guardar interacción</button></div></form>
+            </div>
+        </div>
+    </div>
+
+    <div id="crmClientDetailModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="crmDetailName">
+        <div class="modal-backdrop" id="crmClientDetailBackdrop"></div><div class="modal-content"><button class="modal-close" id="crmClientDetailClose" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-person-vcard"></i></div><h3 id="crmDetailName"></h3><p id="crmDetailEmail" class="modal-meta"></p><p id="crmDetailPhone" class="modal-meta"></p><p id="crmDetailCompany" class="modal-meta"></p><p id="crmDetailEstado" class="modal-meta"></p><p id="crmDetailEtapa" class="modal-meta"></p><div class="field-group"><label for="crmDetailEtapaSelect">Cambiar etapa CRM</label><select id="crmDetailEtapaSelect"><option value="Prospecto">Prospecto</option><option value="Activo">Activo</option><option value="Frecuente">Frecuente</option><option value="Inactivo">Inactivo</option></select></div><button id="crmDetailEtapaBtn" class="btn btn-primary" type="button">Guardar etapa</button><hr><h4>Interacciones</h4><div id="crmDetailInteracciones"></div></div></div>
+    </div>
+
+    <div id="userModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="userModalTitle"><div class="modal-backdrop" id="userModalBackdrop"></div><div class="modal-content"><button class="modal-close" id="userModalClose" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-person-gear"></i></div><h3 id="userModalTitle">Nuevo usuario</h3><form id="userForm" class="product-form modal-form"><div class="field-group"><label for="userNameInput">Nombre</label><input id="userNameInput" name="nombre" required></div><div class="field-group"><label for="userEmailInput">Correo electrónico</label><input id="userEmailInput" name="email" type="email" required></div><div class="field-group"><label for="userRoleInput">Rol</label><select id="userRoleInput" name="rol"><option value="usuario">Usuario</option><option value="admin">Administrador</option></select></div><div class="form-actions"><button id="userModalCancel" class="btn btn-outline" type="button">Cancelar</button><button class="btn btn-primary" type="submit">Guardar usuario</button></div></form></div></div></div>
+
+    <div id="saveConfirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-body"><div class="modal-icon"><i class="bi bi-check2-circle"></i></div><h3 id="saveConfirmTitle">Confirmar cambios</h3><p id="saveConfirmText" class="modal-description">¿Deseas guardar los cambios?</p><div class="form-actions"><button id="saveConfirmCancel" class="btn btn-outline" type="button">Cancelar</button><button id="saveConfirmAccept" class="btn btn-primary" type="button">Confirmar y guardar</button></div></div></div></div>
+
+    <div id="userDeleteModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="userDeleteTitle"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-body"><div class="modal-icon"><i class="bi bi-exclamation-triangle-fill"></i></div><h3 id="userDeleteTitle">Eliminar usuario</h3><p id="userDeleteText" class="modal-description">¿Deseas eliminar este usuario?</p><div class="form-actions"><button id="userDeleteCancel" class="btn btn-outline" type="button">Cancelar</button><button id="userDeleteAccept" class="btn btn-primary" type="button">Eliminar usuario</button></div></div></div></div>
 
     <script src="js/admin.js"></script>
     <script src="js/crm.js"></script>
