@@ -24,7 +24,7 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-const productos = [
+let productos = [
     { id: 1, nombre: 'Tienda Pro-Series', precio: 120, descripcion: 'Resistente al agua y viento, para 2 personas.', detalle: 'Material reforzado y costuras selladas.', esRecomendado: true, categoria: 'tiendas', descuento: 0, rating: 4.9, stock: 8 },
     { id: 2, nombre: 'Saco Térmico -5°C', precio: 85, descripcion: 'Máximo confort en noches frías de montaña.', detalle: 'Aislamiento térmico premium.', esRecomendado: false, categoria: 'sacos', descuento: 10, rating: 4.7, stock: 5 },
     { id: 3, nombre: 'Linterna Solar LED', precio: 30, descripcion: 'Recargable y duradera.', detalle: 'Tres modos de iluminación y carga solar integrada.', esRecomendado: true, categoria: 'iluminacion', descuento: 0, rating: 4.8, stock: 12 },
@@ -36,6 +36,27 @@ const productos = [
     { id: 9, nombre: 'Tienda 3 Estaciones', precio: 150, descripcion: 'Versátil y ligera para 3 estaciones.', detalle: 'Costuras reforzadas y ventilación.', esRecomendado: true, categoria: 'tiendas', descuento: 0, rating: 4.8, stock: 5 },
     { id: 10, nombre: 'Colchoneta Aislante', precio: 45, descripcion: 'Aislamiento y comodidad para acampar.', detalle: 'Inflable con funda resistente.', esRecomendado: false, categoria: 'accesorios', descuento: 0, rating: 4.5, stock: 11 },
 ];
+
+function loadScmCatalog() {
+    try {
+        const scmProducts = JSON.parse(localStorage.getItem('scm_catalog_cache') || '[]');
+        if (!scmProducts.length) return;
+        productos = scmProducts.filter(item => item.origen === 'tienda').map(item => ({
+            id: item.id,
+            nombre: item.nombre,
+            precio: Number(item.costo_unitario || 0),
+            descripcion: item.descripcion || '',
+            detalle: item.descripcion || '',
+            categoria: item.categoria || 'accesorios',
+            stock: Number(item.stock_actual || 0),
+            descuento: 0,
+            rating: 4.5,
+            esRecomendado: item.estrategia_logistica === 'PUSH'
+        }));
+    } catch (error) {
+        console.warn('No se pudo cargar el catálogo SCM:', error);
+    }
+}
 
 const state = {
     cart: JSON.parse(localStorage.getItem('campingCart') || '[]'),

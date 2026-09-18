@@ -33,6 +33,13 @@
                 <button type="button" class="nav-link" data-view="clientes"><i class="bi bi-people"></i><span>Clientes</span></button>
                 <button type="button" class="nav-link" data-view="reportes"><i class="bi bi-bar-chart-line"></i><span>Reportes</span></button>
                 <div class="sidebar-divider"></div>
+                <p class="sidebar-section-label">SCM</p>
+                <button type="button" class="nav-link" data-view="scm-productos"><i class="bi bi-boxes"></i><span>Productos SCM</span></button>
+                <button type="button" class="nav-link" data-view="scm-inventario"><i class="bi bi-clipboard-data"></i><span>Inventario</span></button>
+                <button type="button" class="nav-link" data-view="scm-proveedores"><i class="bi bi-truck"></i><span>Proveedores</span></button>
+                <button type="button" class="nav-link" data-view="scm-pedidos"><i class="bi bi-receipt"></i><span>Pedidos SCM</span></button>
+                <button type="button" class="nav-link" data-view="scm-reportes"><i class="bi bi-bar-chart-steps"></i><span>Reportes SCM</span></button>
+                <div class="sidebar-divider"></div>
                 <p class="sidebar-section-label">CRM</p>
                 <button type="button" class="nav-link" data-view="crm"><i class="bi bi-person-rolodex"></i><span>Gestión CRM</span></button>
                 <button type="button" class="nav-link" data-view="interacciones"><i class="bi bi-chat-dots"></i><span>Interacciones</span></button>
@@ -420,6 +427,22 @@
                 </section>
             </section>
 
+            <section id="view-scm-productos" class="view-section">
+                <section class="filters-card"><div class="filter-group"><label for="scmProductSearch">Buscar producto</label><input id="scmProductSearch" placeholder="Nombre o categoría" /></div><div class="filter-group"><label for="scmStrategyFilter">Estrategia</label><select id="scmStrategyFilter"><option value="">Todas</option><option value="PUSH">PUSH</option><option value="PULL">PULL</option></select></div><button id="openScmProductModal" class="btn btn-primary" type="button"><i class="bi bi-plus-circle"></i> Nuevo producto</button></section>
+                <section class="panel-card"><div class="panel-head"><h3>Productos SCM</h3><p>Control de recursos y asociación con proveedores</p></div><div class="table-wrap"><table><thead><tr><th>Producto</th><th>Categoría</th><th>Stock</th><th>Mínimo</th><th>Proveedor</th><th>Estrategia</th><th>Acciones</th></tr></thead><tbody id="scmProductsBody"></tbody></table></div><div id="scmProductsPagination" class="pagination-row"></div></section>
+            </section>
+
+            <section id="view-scm-inventario" class="view-section">
+                <section class="panel-card"><div class="panel-head"><div><h3>Inventario y trazabilidad</h3><p>Las entradas y salidas actualizan el stock automáticamente.</p></div><button id="openMovementModal" class="btn btn-primary" type="button"><i class="bi bi-arrow-left-right"></i> Registrar movimiento</button></div><div class="table-wrap"><table><thead><tr><th>Producto</th><th>Stock actual</th><th>Stock mínimo</th><th>Estado</th><th>Último movimiento</th><th>Historial</th></tr></thead><tbody id="scmInventoryBody"></tbody></table></div><div id="scmInventoryPagination" class="pagination-row"></div></section>
+                <section class="panel-card scm-low-stock"><div class="panel-head"><h3>Alertas de stock crítico</h3></div><div id="scmLowStockList"></div></section>
+            </section>
+
+            <section id="view-scm-proveedores" class="view-section"><section class="panel-card"><div class="panel-head"><div><h3>Proveedores</h3><p>Directorio de abastecimiento.</p></div><button id="openSupplierModal" class="btn btn-primary" type="button"><i class="bi bi-plus-circle"></i> Nuevo proveedor</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Contacto</th><th>Correo</th><th>Teléfono</th><th>Acciones</th></tr></thead><tbody id="scmSuppliersBody"></tbody></table></div></section></section>
+
+            <section id="view-scm-pedidos" class="view-section"><section class="panel-card"><div class="panel-head"><div><h3>Pedidos de suministro</h3><p>PUSH automático y PULL manual.</p></div><button id="openOrderModal" class="btn btn-primary" type="button"><i class="bi bi-plus-circle"></i> Generar pedido</button></div><div class="table-wrap"><table><thead><tr><th>Producto</th><th>Cantidad</th><th>Tipo</th><th>Estado</th><th>Fecha</th><th>Acción</th></tr></thead><tbody id="scmOrdersBody"></tbody></table></div><div id="scmOrdersPagination" class="pagination-row"></div></section></section>
+
+            <section id="view-scm-reportes" class="view-section"><section class="stats-grid compact"><article class="stat-card"><p>Productos</p><h3 id="scmProductsMetric">0</h3><span>Catálogo SCM</span></article><article class="stat-card"><p>Proveedores</p><h3 id="scmSuppliersMetric">0</h3><span>Abastecimiento</span></article><article class="stat-card"><p>Pedidos pendientes</p><h3 id="scmPendingMetric">0</h3><span>Por surtir</span></article><article class="stat-card"><p>Inventario crítico</p><h3 id="scmCriticalMetric">0</h3><span>Requiere atención</span></article></section><section class="panel-grid"><div class="panel-card"><div class="panel-head"><h3>Comparativa PUSH vs PULL</h3></div><div id="scmStrategyChart" class="crm-chart-bars"></div></div><div class="panel-card"><div class="panel-head"><h3>Nivel de madurez SCM</h3></div><div class="scm-maturity" id="scmMaturityPanel"></div><select id="scmLevelSelect"><option>Inicial</option><option>En desarrollo</option><option>Optimizado</option></select><button id="saveScmLevel" class="btn btn-primary" type="button">Guardar nivel</button></div></section><section class="panel-card"><div class="panel-head"><h3>Inventario crítico y rotación</h3></div><div id="scmReportList"></div></section></section>
+
             <!-- ========== CRM: Gestión de Clientes ========== -->
             <section id="view-crm" class="view-section">
                 <section class="filters-card">
@@ -793,8 +816,13 @@
 
     <div id="userDeleteModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="userDeleteTitle"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-body"><div class="modal-icon"><i class="bi bi-exclamation-triangle-fill"></i></div><h3 id="userDeleteTitle">Eliminar usuario</h3><p id="userDeleteText" class="modal-description">¿Deseas eliminar este usuario?</p><div class="form-actions"><button id="userDeleteCancel" class="btn btn-outline" type="button">Cancelar</button><button id="userDeleteAccept" class="btn btn-primary" type="button">Eliminar usuario</button></div></div></div></div>
 
+    <div id="scmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scmModalTitle"><div class="modal-backdrop"></div><div class="modal-content max-w-2xl"><button id="scmModalClose" class="modal-close" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-boxes"></i></div><h3 id="scmModalTitle">SCM</h3><form class="product-form modal-form"><div class="modal-form-grid scm-form-fields"></div><div class="form-actions"><button id="scmModalCancel" class="btn btn-outline" type="button">Cancelar</button><button class="btn btn-primary" type="submit">Guardar cambios</button></div></form></div></div></div>
+    <div id="scmDeleteModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scmDeleteTitle"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-body"><div class="modal-icon"><i class="bi bi-exclamation-triangle-fill"></i></div><h3 id="scmDeleteTitle">Eliminar registro</h3><p id="scmDeleteText" class="modal-description">¿Deseas eliminar este registro?</p><div class="form-actions"><button id="scmDeleteCancel" class="btn btn-outline" type="button">Cancelar</button><button id="scmDeleteAccept" class="btn btn-primary" type="button">Eliminar</button></div></div></div></div>
+    <div id="scmHistoryModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scmHistoryTitle"><div class="modal-backdrop"></div><div class="modal-content max-w-2xl"><button id="scmHistoryClose" class="modal-close" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-clock-history"></i></div><h3 id="scmHistoryTitle">Historial de movimientos</h3><div id="scmHistoryList"></div></div></div></div>
+
     <script src="js/admin.js"></script>
     <script src="js/crm.js"></script>
+    <script src="js/scm.js"></script>
     <script>
         // This script is added to handle form validation since admin.js is not provided for modification.
         document.addEventListener('DOMContentLoaded', () => {
