@@ -596,6 +596,7 @@ function initShop() {
         }
     });
 
+    loadScmCatalog();
     renderProducts();
     renderCart();
 
