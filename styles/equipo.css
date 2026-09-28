@@ -81,6 +81,12 @@
     font-size: 3rem;
 }
 
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .product-card.placeholder { visibility: hidden; height: 360px; }
 
 /* keep consistent card height for varying content */
@@ -94,6 +100,19 @@
     color: white;
     padding: 0.25rem 0.6rem;
     border-radius: 0.5rem;
+    font-weight: 700;
+}
+
+.product-origin-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1;
+    padding: 0.32rem 0.65rem;
+    border-radius: 999px;
+    background: #e9f1fa;
+    color: #285b8f;
+    font-size: 0.75rem;
     font-weight: 700;
 }
 
@@ -167,6 +186,76 @@
     color: #4b5563;
     font-size: 4rem;
     margin-bottom: 1.5rem;
+}
+
+.product-detail .detalle-imagen img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 300px;
+    max-height: 430px;
+    object-fit: contain;
+    border-radius: inherit;
+    background: #f1f3f0;
+}
+
+.product-gallery {
+    width: 100%;
+    display: grid;
+    gap: 0.8rem;
+}
+
+.product-gallery-main {
+    width: 100%;
+    border-radius: 1.25rem;
+    overflow: hidden;
+    background: linear-gradient(135deg, #f2e8dc, #d8c1a1);
+}
+
+.product-gallery-main img {
+    display: block;
+    width: 100%;
+    min-height: 320px;
+    max-height: 420px;
+    object-fit: cover;
+    border-radius: inherit;
+    background: #f1f3f0;
+}
+
+.product-gallery-thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 0.5rem;
+}
+
+.product-gallery-thumb {
+    border: 2px solid transparent;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f3f1ec;
+    padding: 0;
+    cursor: pointer;
+}
+
+.product-gallery-thumb.active {
+    border-color: var(--color-naranja);
+}
+
+.product-gallery-thumb img {
+    display: block;
+    width: 100%;
+    height: 58px;
+    object-fit: cover;
+}
+
+.c2c-photo-preview {
+    display: block;
+    width: min(100%, 420px);
+    max-height: 260px;
+    margin-top: 0.75rem;
+    object-fit: contain;
+    border-radius: 0.75rem;
+    background: #f1f3f0;
 }
 
 /* Modal inner card that resembles an Amazon-like product panel */

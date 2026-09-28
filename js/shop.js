@@ -37,22 +37,130 @@ let productos = [
     { id: 10, nombre: 'Colchoneta Aislante', precio: 45, descripcion: 'Aislamiento y comodidad para acampar.', detalle: 'Inflable con funda resistente.', esRecomendado: false, categoria: 'accesorios', descuento: 0, rating: 4.5, stock: 11 },
 ];
 
-function loadScmCatalog() {
+function normalizeImageList(value) {
+    const items = Array.isArray(value) ? value : (value ? [value] : []);
+    return [...new Set(items.filter(Boolean).map(item => String(item).trim()).filter(Boolean))];
+}
+
+function getProductImages(producto) {
+    const sources = [producto?.imagenes, producto?.images, producto?.photo, producto?.imagen_url, producto?.photos];
+    const gallery = normalizeImageList(sources.flatMap(item => Array.isArray(item) ? item : [item]));
+    return gallery.length ? gallery : [producto?.photo || producto?.imagen_url || ''];
+}
+
+function getSharedCategories() {
     try {
-        const scmProducts = JSON.parse(localStorage.getItem('scm_catalog_cache') || '[]');
-        if (!scmProducts.length) return;
-        productos = scmProducts.filter(item => item.origen === 'tienda').map(item => ({
+        const categories = JSON.parse(localStorage.getItem('rutaSalvajeCategories') || '[]');
+        return categories.map(category => String(category || '').trim().toLowerCase()).filter(Boolean);
+    } catch (error) {
+        return [];
+    }
+}
+
+function renderShopCategoryOptions() {
+    const categorySelect = document.getElementById('categorySelect');
+    if (!categorySelect) return;
+    const categories = [...new Set([...productos.map(producto => String(producto.categoria || '').trim().toLowerCase()), ...getSharedCategories()].filter(Boolean))];
+    const selectedCategory = categorySelect.value;
+    const escapeOption = value => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+    categorySelect.innerHTML = `<option value="all">Todas las categorías</option>${categories.map(value => `<option value="${escapeOption(value)}">${escapeOption(value.charAt(0).toLocaleUpperCase('es') + value.slice(1))}</option>`).join('')}`;
+    if (categories.includes(selectedCategory)) categorySelect.value = selectedCategory;
+}
+
+function buildProductGalleryMarkup(producto, selectedImage = null) {
+    const images = getProductImages(producto).filter(Boolean);
+    if (!images.length) return '';
+    const activeImage = selectedImage || images[0];
+    return `
+        <div class="product-gallery">
+            <div class="product-gallery-main">
+                <img src="${activeImage}" alt="${producto.nombre}" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&h=600&fit=crop';" />
+            </div>
+            <div class="product-gallery-thumbs">
+                ${images.map((image, index) => `
+                    <button type="button" class="product-gallery-thumb ${image === activeImage ? 'active' : ''}" data-gallery-image="${image}" aria-label="Ver imagen ${index + 1}">
+                        <img src="${image}" alt="${producto.nombre} ${index + 1}" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=200&h=140&fit=crop';" />
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+async function loadScmCatalog() {
+    try {
+        let scmProducts = [];
+        try {
+            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+            const { getFirestore, collection, getDocs } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+            const firebaseConfig = {
+                apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
+                authDomain: 'camping-3a6a4.firebaseapp.com',
+                projectId: 'camping-3a6a4',
+                storageBucket: 'camping-3a6a4.firebasestorage.app',
+                messagingSenderId: '181839243079',
+                appId: '1:181839243079:web:df39441f32098fc7ca4e62'
+            };
+            const app = initializeApp(firebaseConfig, 'shopScmCatalog');
+            const snapshot = await getDocs(collection(getFirestore(app), 'scm_productos'));
+            scmProducts = snapshot.docs.map(productDoc => ({ id: productDoc.id, ...productDoc.data() }));
+            localStorage.setItem('scm_catalog_cache', JSON.stringify(scmProducts));
+        } catch (error) {
+            scmProducts = JSON.parse(localStorage.getItem('scm_catalog_cache') || '[]');
+        }
+        const communityProducts = [];
+        for (let index = 0; index < localStorage.length; index++) {
+            const key = localStorage.key(index);
+            if (!key?.startsWith('userPublications_')) continue;
+            try {
+                communityProducts.push(...JSON.parse(localStorage.getItem(key) || '[]').map(item => ({ ...item, _source: 'community' })));
+            } catch (error) {
+                console.warn('Se ignoró una publicación comunitaria inválida.', error);
+            }
+        }
+        const sourceProducts = scmProducts.filter(item => item.origen === 'tienda').map(item => ({ ...item, _source: 'store' }));
+        const syncedCommunityIds = new Set(scmProducts.filter(item => item.origen === 'comunidad').map(item => String(item.publicacion_id)));
+        for (const item of scmProducts.filter(product => product.origen === 'comunidad')) {
+            sourceProducts.push({ ...item, _source: 'community', communityListing: true });
+        }
+        for (const item of communityProducts) {
+            if (syncedCommunityIds.has(String(item.id))) continue;
+            sourceProducts.push({
+                id: `community-${item.id}`,
+                nombre: item.name,
+                descripcion: item.description || '',
+                categoria: 'comunidad',
+                costo_unitario: Number(item.price || 0),
+                stock_actual: Number(item.stock || 1),
+                estrategia_logistica: 'PULL',
+                origen: 'comunidad',
+                imagen_url: item.photo || '',
+                _source: 'community',
+                communityListing: true
+            });
+        }
+        if (!sourceProducts.length) {
+            renderShopCategoryOptions();
+            return;
+        }
+        productos = sourceProducts.map(item => ({
             id: item.id,
             nombre: item.nombre,
             precio: Number(item.costo_unitario || 0),
             descripcion: item.descripcion || '',
             detalle: item.descripcion || '',
-            categoria: item.categoria || 'accesorios',
+            categoria: String(item.categoria || 'accesorios').trim().toLowerCase(),
             stock: Number(item.stock_actual || 0),
+            photo: item.imagen_url || item.photo || '',
+            origen: item.origen,
+            communityListing: item._source === 'community' || item.origen === 'comunidad',
             descuento: 0,
             rating: 4.5,
-            esRecomendado: item.estrategia_logistica === 'PUSH'
+            esRecomendado: item.estrategia_logistica === 'PUSH',
+            imagenes: normalizeImageList(item.imagenes || item.images || [item.imagen_url || item.photo || ''])
         }));
+
+        renderShopCategoryOptions();
     } catch (error) {
         console.warn('No se pudo cargar el catálogo SCM:', error);
     }
@@ -127,18 +235,23 @@ function renderProducts() {
 
     const html = pageItems.map((producto) => {
         const recomendado = producto.esRecomendado ? '<span class="product-recommendation">Recomendado</span>' : '';
+        const origenBadge = producto.communityListing ? '<span class="product-origin-badge">Comunidad</span>' : '';
         const descuentoBadge = producto.descuento ? `<span class="product-discount">-${producto.descuento}%</span>` : '';
+        const imageMarkup = producto.photo
+            ? `<img src="${producto.photo}" alt="${producto.nombre}" loading="lazy" onerror="this.onerror=null;this.parentElement.textContent='Equipo de camping'">`
+            : '<span aria-hidden="true">⛺</span>';
         return `
             <article class="product-card">
                 ${recomendado}
                 ${descuentoBadge}
-                <div class="product-image">📸</div>
+                ${origenBadge}
+                <div class="product-image">${imageMarkup}</div>
                 <div class="product-body">
                     <h2 class="product-title">${producto.nombre}</h2>
                     <p class="product-description">${producto.descripcion}</p>
                     <p class="product-price">${formatPrice(producto.precio)}</p>
                     <div class="product-actions">
-                        <button class="btn btn-secondary" type="button" onclick="window.shop.showProductDetail(${producto.id})">Ver Detalle</button>
+                        <button class="btn btn-secondary" type="button" data-product-detail="${String(producto.id).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">Ver Detalle</button>
                     </div>
                 </div>
             </article>
@@ -176,7 +289,7 @@ function renderProducts() {
 }
 
 function showProductDetail(id) {
-    const producto = productos.find((item) => item.id === id);
+    const producto = productos.find((item) => String(item.id) === String(id));
     if (!producto) return;
 
     state.selectedProductId = id;
@@ -184,6 +297,7 @@ function showProductDetail(id) {
     if (!detail) return;
 
     document.body.classList.add('modal-open');
+    const galleryMarkup = buildProductGalleryMarkup(producto, producto.photo || getProductImages(producto)[0]);
     detail.innerHTML = `
         <div class="product-modal-backdrop" onclick="window.shop.closeProductModal()">
             <div class="product-modal-card" onclick="event.stopPropagation();">
@@ -195,7 +309,7 @@ function showProductDetail(id) {
                     <h3>${producto.nombre}</h3>
                 </div>
                 <div class="left">
-                    <div class="detalle-imagen">📸</div>
+                    ${galleryMarkup || `<div class="detalle-imagen">${producto.photo ? `<img src="${producto.photo}" alt="${producto.nombre}" onerror="this.onerror=null;this.parentElement.textContent='Equipo de camping'">` : '<span aria-hidden="true">⛺</span>'}</div>`}
                     <div class="rounded-2xl bg-crema p-4 text-sm text-gray-700">
                         <p class="font-semibold text-bosque">${producto.nombre}</p>
                         <p class="mt-1">${producto.detalle}</p>
@@ -219,13 +333,24 @@ function showProductDetail(id) {
                         <input id="quantityInput" type="number" min="1" max="5" value="1" class="w-20 rounded-lg border border-gray-300 px-3 py-2" />
                     </div>
                     <div class="detalle-actions">
-                        <button class="btn btn-welcome" type="button" onclick="window.shop.addToCart(${producto.id}, true)"><i class="bi bi-cart-check-fill"></i> Agregar al carrito</button>
+                        ${producto.communityListing ? '<button class="btn btn-welcome" type="button" data-community-link><i class="bi bi-people"></i> Ver comunidad</button>' : `<button class="btn btn-welcome" type="button" data-add-product="${String(producto.id).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"><i class="bi bi-cart-check-fill"></i> Agregar al carrito</button>`}
                     </div>
                 </div>
             </div>
             <div id="addFeedback" class="cart-feedback hidden"><i class="bi bi-cart-check-fill"></i></div>
         </div>
     `;
+
+    const galleryButtons = detail.querySelectorAll('[data-gallery-image]');
+    galleryButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const mainImage = detail.querySelector('.product-gallery-main img');
+            if (!mainImage) return;
+            const selected = button.dataset.galleryImage;
+            mainImage.src = selected;
+            galleryButtons.forEach((item) => item.classList.toggle('active', item === button));
+        });
+    });
     detail.classList.remove('hidden');
 }
 
@@ -251,13 +376,13 @@ function showAddFeedback() {
 }
 
 function addToCart(productId, showFeedback = false) {
-    const producto = productos.find((item) => item.id === productId);
+    const producto = productos.find((item) => String(item.id) === String(productId));
     const quantityInput = document.getElementById('quantityInput');
     const quantity = quantityInput ? Number(quantityInput.value) || 1 : 1;
 
     if (!producto) return;
 
-    const existing = state.cart.find((item) => item.id === productId);
+    const existing = state.cart.find((item) => String(item.id) === String(productId));
     if (existing) {
         existing.quantity += quantity;
     } else {
@@ -307,10 +432,10 @@ function renderCart() {
                     <p class="text-sm text-gray-500">${formatPrice(item.price)} c/u</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button class="rounded-full border px-2 py-1" type="button" onclick="window.shop.changeQuantity(${item.id}, -1)">-</button>
+                    <button class="rounded-full border px-2 py-1" type="button" onclick='window.shop.changeQuantity(${JSON.stringify(item.id)}, -1)'>-</button>
                     <span class="min-w-6 text-center">${item.quantity}</span>
-                    <button class="rounded-full border px-2 py-1" type="button" onclick="window.shop.changeQuantity(${item.id}, 1)">+</button>
-                    <button class="ml-2 text-sm text-red-500" type="button" onclick="window.shop.removeFromCart(${item.id})">Quitar</button>
+                    <button class="rounded-full border px-2 py-1" type="button" onclick='window.shop.changeQuantity(${JSON.stringify(item.id)}, 1)'>+</button>
+                    <button class="ml-2 text-sm text-red-500" type="button" onclick='window.shop.removeFromCart(${JSON.stringify(item.id)})'>Quitar</button>
                 </div>
             </div>
         `).join('');
@@ -416,7 +541,7 @@ function renderCart() {
                     <p class="text-sm text-gray-600">${producto.descripcion}</p>
                     <p class="text-sm font-semibold text-naranja mt-2">${formatPrice(producto.precio)}</p>
                 </div>
-                <button class="btn btn-welcome btn-small" type="button" onclick="window.shop.addToCart(${producto.id})">Agregar</button>
+                        <button class="btn btn-welcome btn-small" type="button" onclick='window.shop.addToCart(${JSON.stringify(producto.id)})'>Agregar</button>
             </div>
         `).join('');
     }
@@ -440,11 +565,11 @@ function changePage(p) {
 }
 
 function changeQuantity(productId, delta) {
-    const item = state.cart.find((entry) => entry.id === productId);
+    const item = state.cart.find((entry) => String(entry.id) === String(productId));
     if (!item) return;
     item.quantity += delta;
     if (item.quantity <= 0) {
-        state.cart = state.cart.filter((entry) => entry.id !== productId);
+        state.cart = state.cart.filter((entry) => String(entry.id) !== String(productId));
     }
     saveCart();
     renderCart();
@@ -452,7 +577,7 @@ function changeQuantity(productId, delta) {
 }
 
 function removeFromCart(productId) {
-    state.cart = state.cart.filter((item) => item.id !== productId);
+    state.cart = state.cart.filter((item) => String(item.id) !== String(productId));
     saveCart();
     renderCart();
     renderProducts();
@@ -535,13 +660,26 @@ function initCookieConsent() {
     });
 }
 
-function initShop() {
+async function initShop() {
     const searchInput = document.getElementById('searchInput');
     const categorySelect = document.getElementById('categorySelect');
     const filterAll = document.getElementById('filterAll');
     const filterRecommended = document.getElementById('filterRecommended');
     const nav = document.querySelector('nav.fixed'); // Stable parent for delegation
     const closeCartButton = document.getElementById('closeCartButton');
+
+    window.addEventListener('ruta-salvaje-categories-updated', renderShopCategoryOptions);
+    window.addEventListener('storage', event => {
+        if (event.key === 'rutaSalvajeCategories') renderShopCategoryOptions();
+    });
+
+    document.addEventListener('click', event => {
+        const detailButton = event.target.closest('[data-product-detail]');
+        if (detailButton) showProductDetail(detailButton.dataset.productDetail);
+        const addButton = event.target.closest('[data-add-product]');
+        if (addButton) addToCart(addButton.dataset.addProduct, true);
+        if (event.target.closest('[data-community-link]')) window.location.href = 'marketing.html';
+    });
 
     if (document.body.classList.contains('home-page')) {
         initCookieConsent();
@@ -596,7 +734,7 @@ function initShop() {
         }
     });
 
-    loadScmCatalog();
+    await loadScmCatalog();
     renderProducts();
     renderCart();
 
@@ -622,4 +760,4 @@ window.shop = {
     changePage,
 };
 
-initShop();
+initShop().catch(error => console.error('No se pudo iniciar la tienda:', error));

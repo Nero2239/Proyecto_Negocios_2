@@ -73,6 +73,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const promotionEditModalClose = document.getElementById('promotionEditModalClose');
     const promotionEditForm = document.getElementById('promotionEditForm');
     const promotionEditCancel = document.getElementById('promotionEditCancel');
+    const categoryManagerModal = document.getElementById('categoryManagerModal');
+    const categoryManagerForm = document.getElementById('categoryManagerForm');
+    const categoryManagerName = document.getElementById('categoryManagerName');
     let itemToDelete = null;
     let editingPromoId = null;
     let currentOrder = null;
@@ -98,6 +101,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let products = [...initialProducts];
     let editingId = null;
+    const categoryStorageKey = 'rutaSalvajeCategories';
+    const normalizeCategory = value => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+    function categoryChoices() {
+        let stored = [];
+        try { stored = JSON.parse(localStorage.getItem(categoryStorageKey) || '[]'); } catch (error) { stored = []; }
+        const values = [...stored, ...products.map(product => product.category), ...Array.from(document.querySelectorAll('#productCategory option, #categoryFilter option'), option => option.value)];
+        return [...new Set(values.map(normalizeCategory).filter(Boolean))];
+    }
+    function renderCategoryOptions() {
+        const categories = categoryChoices();
+        const previousFilter = normalizeCategory(categoryFilter?.value);
+        const previousProduct = normalizeCategory(document.getElementById('productCategory')?.value);
+        const label = value => value.charAt(0).toLocaleUpperCase('es') + value.slice(1);
+        if (categoryFilter) categoryFilter.innerHTML = `<option value="">Todas</option>${categories.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(label(value))}</option>`).join('')}`;
+        const productCategory = document.getElementById('productCategory');
+        if (productCategory) productCategory.innerHTML = categories.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(label(value))}</option>`).join('');
+        if (categoryFilter && categories.includes(previousFilter)) categoryFilter.value = previousFilter;
+        if (productCategory && categories.includes(previousProduct)) productCategory.value = previousProduct;
+    }
+    const validCategoryName = value => /^[a-záéíóúüñ0-9][a-záéíóúüñ0-9 _-]*$/i.test(String(value || '').trim());
+    function addSharedCategory(value) {
+        const category = normalizeCategory(value);
+        if (!validCategoryName(category)) throw new Error('Usa letras, números, espacios o guiones en el nombre.');
+        const categories = categoryChoices();
+        if (categories.includes(category)) throw new Error('Esa categoría ya existe.');
+        const updated = [...categories, category];
+        localStorage.setItem(categoryStorageKey, JSON.stringify(updated));
+        window.dispatchEvent(new CustomEvent('ruta-salvaje-categories-updated', { detail: { categories: updated } }));
+        return category;
+    }
     let promotions = [
         {
             id: 1,
@@ -175,6 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const titles = {
             dashboard: 'Inicio',
+            'scm-dashboard': 'Dashboard SCM',
+            'scm-productos': 'Productos SCM',
+            'scm-inventario': 'Inventario SCM',
+            'scm-proveedores': 'Proveedores SCM',
+            'scm-pedidos': 'Pedidos SCM',
+            'scm-reportes': 'Reportes SCM',
             productos: 'Productos',
             pedidos: 'Pedidos',
             promociones: 'Promociones',
@@ -211,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const filtered = products.filter(product => {
             const matchesSearch = `${product.name} ${product.category}`.toLowerCase().includes(searchTerm);
-            const matchesCategory = !categoryValue || product.category === categoryValue;
+            const matchesCategory = !categoryValue || normalizeCategory(product.category) === normalizeCategory(categoryValue);
             const matchesStatus = !statusValue || product.status === statusValue;
             return matchesSearch && matchesCategory && matchesStatus;
         });
@@ -348,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function fillProductForm(product) {
         if (!productForm) return;
         document.getElementById('productName').value = product.name;
-        document.getElementById('productCategory').value = product.category;
+        document.getElementById('productCategory').value = normalizeCategory(product.category);
         document.getElementById('productPrice').value = product.price;
         document.getElementById('productDescription').value = product.description || '';
         document.getElementById('productStock').value = product.stock;
@@ -378,12 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="field-group">
                         <label>Categoría</label>
                         <select name="category">
-                            <option value="Tiendas" ${product.category === 'Tiendas' ? 'selected' : ''}>Tiendas</option>
-                            <option value="Sacos" ${product.category === 'Sacos' ? 'selected' : ''}>Sacos</option>
-                            <option value="Iluminación" ${product.category === 'Iluminación' ? 'selected' : ''}>Iluminación</option>
-                            <option value="Ropa" ${product.category === 'Ropa' ? 'selected' : ''}>Ropa</option>
-                            <option value="Botas" ${product.category === 'Botas' ? 'selected' : ''}>Botas</option>
-                            <option value="Emergencias" ${product.category === 'Emergencias' ? 'selected' : ''}>Emergencias</option>
+                            ${categoryChoices().map(category => `<option value="${escapeHtml(category)}" ${normalizeCategory(product.category) === category ? 'selected' : ''}>${escapeHtml(category.charAt(0).toLocaleUpperCase('es') + category.slice(1))}</option>`).join('')}
                         </select>
                     </div>
                     <div class="field-group">
@@ -753,6 +788,29 @@ document.addEventListener('DOMContentLoaded', () => {
         control?.addEventListener('change', renderProducts);
     });
 
+    document.querySelectorAll('[data-open-category-manager]').forEach(button => button.addEventListener('click', () => {
+        if (!categoryManagerModal) return;
+        categoryManagerForm?.reset();
+        categoryManagerModal.classList.remove('hidden');
+        categoryManagerName?.focus();
+    }));
+    document.querySelectorAll('[data-close-category-manager]').forEach(button => button.addEventListener('click', () => categoryManagerModal?.classList.add('hidden')));
+    categoryManagerForm?.addEventListener('submit', event => {
+        event.preventDefault();
+        try {
+            const category = addSharedCategory(categoryManagerName?.value);
+            renderCategoryOptions();
+            const productCategory = document.getElementById('productCategory');
+            if (productCategory) productCategory.value = category;
+            categoryManagerModal?.classList.add('hidden');
+            showFeedback(`Categoría "${category}" añadida a todos los catálogos.`);
+        } catch (error) {
+            showFeedback(error.message, 'error');
+        }
+    });
+    window.addEventListener('ruta-salvaje-categories-updated', renderCategoryOptions);
+    window.addEventListener('storage', event => { if (event.key === categoryStorageKey) renderCategoryOptions(); });
+
     cancelProductEdit?.addEventListener('click', () => {
         resetProductForm();
         showFeedback('Formulario cancelado.');
@@ -866,6 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const defaultView = localStorage.getItem('adminView') || 'dashboard';
+    renderCategoryOptions();
     setView(defaultView);
     renderProducts();
     renderPromotions();

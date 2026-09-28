@@ -92,6 +92,16 @@ function renderCommunityPublications(page = 1) {
     }
 }
 
+function getPublicationImages(item) {
+    const images = normalizeGalleryImages(item?.images || item?.imagenes || item?.photo || item?.image || item?.photos);
+    return images.length ? images : [item?.photo || marketingFallbackImage];
+}
+
+function normalizeGalleryImages(value) {
+    const items = Array.isArray(value) ? value : (value ? [value] : []);
+    return [...new Set(items.filter(Boolean).map(item => String(item).trim()).filter(Boolean))];
+}
+
 function isUserLoggedIn() {
     return localStorage.getItem('isLoggedIn') === '1' || Boolean(localStorage.getItem('userEmail'));
 }
@@ -193,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <h3>${item.name}</h3>
                     </div>
                     <div class="left">
-                        <div class="detalle-imagen"><img src="${item.photo || marketingFallbackImage}" onerror="this.onerror=null;this.src='${marketingFallbackImage}'" alt="${item.name}" style="width:100%;height:100%;object-fit:cover;border-radius:16px;"/></div>
+                        ${buildCommunityGallery(item)}
                         <div class="rounded-2xl bg-crema p-4 text-sm text-gray-700">
                             <p class="font-semibold text-bosque">Publicado por</p>
                             <p class="mt-1">${item.owner || 'Usuario'}</p>
@@ -220,6 +230,16 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div id="marketingCartFeedback" class="marketing-cart-feedback hidden"><i class="bi bi-cart-check-fill"></i> Agregado al carrito</div>
         `;
+
+        const galleryButtons = container.querySelectorAll('[data-community-gallery-image]');
+        galleryButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const mainImage = container.querySelector('.product-gallery-main img');
+                if (!mainImage) return;
+                mainImage.src = button.dataset.communityGalleryImage;
+                galleryButtons.forEach((item) => item.classList.toggle('active', item === button));
+            });
+        });
         // attach bid handler if auction
         if (item.auction) {
             setTimeout(() => {
@@ -262,6 +282,25 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             return [];
         }
+    }
+
+    function buildCommunityGallery(item) {
+        const images = getPublicationImages(item);
+        const first = images[0] || marketingFallbackImage;
+        return `
+            <div class="product-gallery">
+                <div class="product-gallery-main">
+                    <img src="${first}" alt="${item.name}" onerror="this.onerror=null;this.src='${marketingFallbackImage}'" />
+                </div>
+                <div class="product-gallery-thumbs">
+                    ${images.map((image, index) => `
+                        <button type="button" class="product-gallery-thumb ${image === first ? 'active' : ''}" data-community-gallery-image="${image}" aria-label="Ver imagen ${index + 1}">
+                            <img src="${image}" alt="${item.name} ${index + 1}" onerror="this.onerror=null;this.src='${marketingFallbackImage}'" />
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
     function saveMarketingCart(cart) {

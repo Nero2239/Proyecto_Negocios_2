@@ -30,12 +30,29 @@ function getPublicationsStorageKey() {
     return userEmail ? `userPublications_${userEmail}` : null;
 }
 
+async function compressProductPhoto(file) {
+    if (!file || !file.type.startsWith('image/')) throw new Error('Selecciona una imagen válida del equipo.');
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const imageData = canvas.toDataURL('image/jpeg', 0.78);
+    if (imageData.length > 900000) throw new Error('La imagen sigue siendo muy grande. Usa una imagen más pequeña.');
+    return imageData;
+}
+
 // --- Lógica para la página "Publicar Producto" ---
 function initPublishProductPage() {
     const publishProductForm = document.getElementById('publishProductForm');
     if (!publishProductForm) return;
 
-    publishProductForm.addEventListener('submit', (event) => {
+    publishProductForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const storageKey = getPublicationsStorageKey();
 
@@ -47,9 +64,18 @@ function initPublishProductPage() {
         const name = document.getElementById('productName').value.trim();
         const price = document.getElementById('productPrice').value;
         const description = document.getElementById('productDescription').value.trim();
+        const photoFile = document.getElementById('productPhoto').files[0];
 
-        if (!name || !price || !description) {
-            showToast('Por favor, completa todos los campos del producto.', 'error');
+        if (!name || !price || !description || !photoFile) {
+            showToast('Completa los datos y agrega una foto del equipo.', 'error');
+            return;
+        }
+
+        let photo;
+        try {
+            photo = await compressProductPhoto(photoFile);
+        } catch (error) {
+            showToast(error.message || 'No se pudo cargar la imagen.', 'error');
             return;
         }
 
@@ -58,7 +84,9 @@ function initPublishProductPage() {
             name: name,
             price: parseFloat(price),
             description: description,
-            photo: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=400&h=300&fit=crop' // Foto simulada
+            photo,
+            stock: 1,
+            condition: 'used'
         };
 
         let publications = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -75,6 +103,19 @@ function initPublishProductPage() {
                 publicationsTab.click();
             }
         }, 1500);
+    });
+
+    const photoInput = document.getElementById('productPhoto');
+    const photoPreview = document.getElementById('productPhotoPreview');
+    photoInput?.addEventListener('change', async () => {
+        if (!photoInput.files[0] || !photoPreview) return;
+        try {
+            photoPreview.src = await compressProductPhoto(photoInput.files[0]);
+            photoPreview.classList.remove('hidden');
+        } catch (error) {
+            photoPreview.classList.add('hidden');
+            showToast(error.message || 'No se pudo leer la imagen.', 'error');
+        }
     });
 }
 
