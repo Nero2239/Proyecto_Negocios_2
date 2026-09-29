@@ -1543,6 +1543,122 @@ body.scm-modal-open {
 .scm-strategy-card span { font-weight: 800; }
 .scm-strategy-card small { color: var(--admin-muted); text-align: center; }
 .scm-strategy-card.is-push strong, .scm-strategy-card.is-push span { color: #147d57; }
+
+.scm-maturity-card {
+    display: grid;
+    gap: 1rem;
+}
+
+.scm-maturity-card .panel-head {
+    margin-bottom: 0;
+}
+
+.scm-maturity-card .panel-head p {
+    margin-top: 0.25rem;
+}
+
+.scm-level-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent);
+    font-size: 0.78rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.scm-maturity {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 12px;
+    background: #fbfaf7;
+}
+
+.scm-maturity strong {
+    color: var(--admin-text);
+    font-size: 1.2rem;
+}
+
+.scm-maturity p {
+    margin: 0;
+    color: var(--admin-muted);
+    font-size: 0.9rem;
+}
+
+.scm-progress {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e8eee9;
+}
+
+.scm-progress span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--admin-accent);
+    transition: width 0.25s ease;
+}
+
+.scm-level-controls {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.scm-level-controls label {
+    color: var(--admin-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.scm-level-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.scm-level-actions select {
+    min-width: 0;
+    flex: 1;
+}
+
+.scm-checklist {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.scm-checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--admin-border);
+    color: var(--admin-muted);
+    font-size: 0.88rem;
+    line-height: 1.35;
+}
+
+.scm-checklist li i {
+    flex: 0 0 auto;
+    color: #b5c0b7;
+    font-size: 1rem;
+}
+
+.scm-checklist li.is-complete {
+    color: var(--admin-text);
+}
+
+.scm-checklist li.is-complete i {
+    color: var(--admin-accent);
+}
 .scm-strategy-card.is-pull strong, .scm-strategy-card.is-pull span { color: #2766b1; }
 
 .scm-product-image-button {
@@ -1735,4 +1851,5 @@ body.scm-modal-open {
     .scm-detail-meta { grid-template-columns: 1fr; }
     .scm-strategy-summary { grid-template-columns: 1fr; }
     .scm-image-upload-head { align-items: flex-start; flex-direction: column; }
+    .scm-level-actions { align-items: stretch; flex-direction: column; }
 }

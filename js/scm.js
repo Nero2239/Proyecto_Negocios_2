@@ -291,7 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
             $('scmSuppliersMetric').textContent = suppliers.length;
             $('scmPendingMetric').textContent = pendingOrders;
             $('scmCriticalMetric').textContent = criticalProducts.length;
-            $('scmMaturityPanel').innerHTML = `<strong>${level}</strong><p>${level === 'Optimizado' ? 'Procesos integrados y medidos.' : level === 'En desarrollo' ? 'Inventario y logística en integración.' : 'Procesos básicos identificados.'}</p>`;
+            const maturityIndex = { Inicial: 1, 'En desarrollo': 2, Optimizado: 3 }[level] || 1;
+            const maturityDescription = level === 'Optimizado' ? 'Procesos integrados y medidos.' : level === 'En desarrollo' ? 'Inventario y logística en integración.' : 'Procesos básicos identificados.';
+            $('scmMaturityPanel').innerHTML = `<strong>${level}</strong><p>${maturityDescription}</p>`;
+            if ($('scmLevelSelect')) $('scmLevelSelect').value = level;
+            if ($('scmLevelBadge')) $('scmLevelBadge').textContent = level;
+            if ($('scmMaturityProgress')) $('scmMaturityProgress').style.width = `${Math.round((maturityIndex / 3) * 100)}%`;
             $('scmStrategyChart').innerHTML = `
                 <div class="scm-donut-chart">
                     <div class="scm-donut" style="--donut-value:${pushPercent}%; --donut-color:#3e7d5d;">
@@ -308,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderPanelPage('scmSlowMoving', slowMoving, 'slowMoving', '<p>No hay productos con rotación lenta.</p>', product => `<div class="risk-item"><strong>${product.nombre}</strong><span>${product.stock_actual} disponibles</span></div>`, 3);
             renderPanelPage('scmHomeLowStock', lowStockList, 'lowStock', '<p>No hay alertas de inventario.</p>', product => `<div class="risk-item"><strong>${product.nombre}</strong><span>${product.stock_actual} disponibles</span></div>`, 3);
             const checklist = $('scmMaturityChecklist');
-            if (checklist) checklist.innerHTML = `<li>${reportProducts.length ? '☑' : '☐'} Catálogo de camping y proveedores integrados</li><li>${movements.length ? '☑' : '☐'} Trazabilidad de movimientos de inventario</li><li>${orders.length ? '☑' : '☐'} Pedidos de reposición administrados</li><li>${push && pull ? '☑' : '☐'} Estrategias PUSH y PULL configuradas</li><li>${bestSellers.length && slowMoving.length ? '☑' : '☐'} Reportes de ventas y rotación disponibles</li>`;
+            if (checklist) checklist.innerHTML = `<li class="${reportProducts.length ? 'is-complete' : ''}"><i class="bi ${reportProducts.length ? 'bi-check-circle-fill' : 'bi-circle'}"></i><span>Catálogo de camping y proveedores integrados</span></li><li class="${movements.length ? 'is-complete' : ''}"><i class="bi ${movements.length ? 'bi-check-circle-fill' : 'bi-circle'}"></i><span>Trazabilidad de movimientos de inventario</span></li><li class="${orders.length ? 'is-complete' : ''}"><i class="bi ${orders.length ? 'bi-check-circle-fill' : 'bi-circle'}"></i><span>Pedidos de reposición administrados</span></li><li class="${push && pull ? 'is-complete' : ''}"><i class="bi ${push && pull ? 'bi-check-circle-fill' : 'bi-circle'}"></i><span>Estrategias PUSH y PULL configuradas</span></li><li class="${bestSellers.length && slowMoving.length ? 'is-complete' : ''}"><i class="bi ${bestSellers.length && slowMoving.length ? 'bi-check-circle-fill' : 'bi-circle'}"></i><span>Reportes de ventas y rotación disponibles</span></li>`;
             if ($('scmHomeProducts')) $('scmHomeProducts').textContent = reportProducts.length;
             if ($('scmHomeSuppliers')) $('scmHomeSuppliers').textContent = suppliers.length;
             if ($('scmHomeOrders')) $('scmHomeOrders').textContent = pendingOrders;
