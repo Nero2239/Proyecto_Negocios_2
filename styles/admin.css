@@ -452,6 +452,44 @@ textarea {
     background: white;
 }
 
+.scm-sort-control {
+    display: inline-grid;
+    grid-template-columns: auto minmax(125px, 1fr);
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--admin-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.scm-sort-control select {
+    width: 100%;
+    min-width: 0;
+    padding: 0.52rem 1.8rem 0.52rem 0.65rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 9px;
+    background: white;
+    color: var(--admin-text);
+    font-size: 0.84rem;
+}
+
+#view-scm-productos > .filters-card {
+    grid-template-columns: minmax(160px, 1.3fr) repeat(2, minmax(115px, 0.8fr)) minmax(190px, 1fr) auto auto;
+    align-items: end;
+}
+
+.scm-inventory-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.scm-inventory-actions .scm-sort-control {
+    grid-template-columns: auto minmax(125px, 1fr);
+}
+
 .products-layout {
     grid-template-columns: 1.3fr 0.9fr;
     align-items: start;
@@ -1081,8 +1119,20 @@ body.scm-modal-open {
 
     .panel-grid,
     .products-layout,
-    .filters-card {
+    .filters-card,
+    #view-scm-productos > .filters-card {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 700px) {
+    .scm-inventory-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .scm-inventory-actions .scm-sort-control {
+        flex: 1;
     }
 }
 
@@ -1832,6 +1882,29 @@ body.scm-modal-open {
     margin: 0;
     color: var(--admin-muted);
     font-size: 0.85rem;
+}
+
+.scm-modal-message {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid #bbd9c4;
+    border-radius: 10px;
+    background: #eff8f1;
+    color: #285b3c;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.scm-modal-message.warning {
+    border-color: #e8d5a8;
+    background: #fff8e8;
+    color: #76571a;
+}
+
+.scm-modal-message.error {
+    border-color: #ecc3bb;
+    background: #fff1ee;
+    color: #91432f;
 }
 
 .category-add-trigger {

@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     (async function initSCM() {
         const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
-        const { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+        const { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, runTransaction } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
         const config = {
             apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc', authDomain: 'camping-3a6a4.firebaseapp.com',
             projectId: 'camping-3a6a4', storageBucket: 'camping-3a6a4.firebasestorage.app',
@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return imageData;
         }
         let products = [], suppliers = [], movements = [], orders = [], pendingDelete = null, selectedProductImages = [], page = { products: 1, inventory: 1, orders: 1 };
+        const pendingPushOrder = (productId, excludeOrderId = '') => orders.find(order => order.id !== excludeOrderId && order.producto_id === productId && order.tipo === 'reposicion' && order.estado === 'pendiente');
         const perPage = 5;
         const campingCatalog = [
             { nombre: 'Tienda Pro-Series', descripcion: 'Resistente al agua y viento, para 2 personas.', categoria: 'tiendas', stock_actual: 8, stock_minimo: 3, costo_unitario: 120, estrategia_logistica: 'PUSH' },
@@ -55,6 +56,144 @@ document.addEventListener('DOMContentLoaded', () => {
         ];
         const campingTerms = ['camp', 'tienda', 'saco', 'linterna', 'luz', 'mochila', 'colchoneta', 'cocina', 'hornillo', 'botiquín', 'botiquin', 'bota', 'trekking', 'aventura', 'outdoor', 'pesca', 'faro', 'casco', 'equipo'];
         const isCampingText = value => campingTerms.some(term => String(value || '').toLowerCase().includes(term));
+
+        async function ensurePushRestockOrder(productId) {
+            if (!productId) return false;
+            const existingOrder = pendingPushOrder(productId);
+            if (existingOrder) {
+                if (existingOrder.origen !== 'automatico_push') return false;
+                await fulfillSupplyOrder(existingOrder.id);
+                return true;
+            }
+            const orderRef = doc(collection(db, 'scm_pedidos'));
+            const created = await runTransaction(db, async transaction => {
+                const productRef = doc(db, 'scm_productos', productId);
+                const productSnapshot = await transaction.get(productRef);
+                if (!productSnapshot.exists()) return false;
+                const product = productSnapshot.data();
+                const stock = Number(product.stock_actual || 0);
+                const minimum = Number(product.stock_minimo || 0);
+                if (product.estrategia_logistica !== 'PUSH' || stock > minimum || product.reposicion_pendiente_id || pendingPushOrder(productId)) return false;
+                transaction.update(productRef, { reposicion_pendiente_id: orderRef.id });
+                transaction.set(orderRef, {
+                    producto_id: productId,
+                    cantidad: Math.max(minimum * 2 - stock, minimum, 1),
+                    tipo: 'reposicion',
+                    estado: 'pendiente',
+                    fecha: new Date().toISOString(),
+                    origen: 'automatico_push'
+                });
+                return true;
+            });
+            if (!created) return false;
+            await fulfillSupplyOrder(orderRef.id);
+            return true;
+        }
+
+        async function recordInventoryMovement(productId, amount, movementType, reason) {
+            if (!productId) throw new Error('Selecciona un producto para registrar el movimiento.');
+            const productRef = doc(db, 'scm_productos', productId);
+            const movementRef = doc(collection(db, 'scm_movimientos'));
+            const automaticOrderRef = doc(collection(db, 'scm_pedidos'));
+
+            return runTransaction(db, async transaction => {
+                const productSnapshot = await transaction.get(productRef);
+                if (!productSnapshot.exists()) throw new Error('El producto ya no existe.');
+                const product = productSnapshot.data();
+                const nextStock = Number(product.stock_actual || 0) + (movementType === 'entrada' ? amount : -amount);
+                if (nextStock < 0) throw new Error('Stock insuficiente.');
+
+                let shouldCreatePushOrder = false;
+                const pendingOrder = pendingPushOrder(productId);
+                if (product.estrategia_logistica === 'PUSH' && nextStock <= Number(product.stock_minimo || 0)) {
+                    shouldCreatePushOrder = !pendingOrder && !product.reposicion_pendiente_id;
+                }
+
+                const timestamp = new Date().toISOString();
+                const productUpdates = { stock_actual: nextStock };
+                if (shouldCreatePushOrder) productUpdates.reposicion_pendiente_id = automaticOrderRef.id;
+                else if (product.estrategia_logistica === 'PUSH' && pendingOrder && !product.reposicion_pendiente_id) productUpdates.reposicion_pendiente_id = pendingOrder.id;
+                transaction.update(productRef, productUpdates);
+                transaction.set(movementRef, {
+                    producto_id: productId,
+                    tipo: movementType,
+                    cantidad: amount,
+                    motivo: reason,
+                    fecha: timestamp
+                });
+                if (shouldCreatePushOrder) {
+                    const minimum = Number(product.stock_minimo || 0);
+                    transaction.set(automaticOrderRef, {
+                        producto_id: productId,
+                        cantidad: Math.max(minimum * 2 - nextStock, minimum, 1),
+                        tipo: 'reposicion',
+                        estado: 'pendiente',
+                        fecha: timestamp,
+                        origen: 'automatico_push'
+                    });
+                }
+                return { productId, wasPush: product.estrategia_logistica === 'PUSH', restockQueued: shouldCreatePushOrder || (pendingOrder?.origen === 'automatico_push' && nextStock <= Number(product.stock_minimo || 0)) };
+            });
+        }
+
+        async function fulfillSupplyOrder(orderId) {
+            const orderRef = doc(db, 'scm_pedidos', orderId);
+            const movementRef = doc(collection(db, 'scm_movimientos'));
+            const automaticOrderRef = doc(collection(db, 'scm_pedidos'));
+
+            await runTransaction(db, async transaction => {
+                const orderSnapshot = await transaction.get(orderRef);
+                if (!orderSnapshot.exists()) throw new Error('El pedido ya no existe.');
+                const order = orderSnapshot.data();
+                if (order.estado !== 'pendiente') throw new Error('Este pedido ya fue surtido.');
+                if (!order.producto_id) throw new Error('El pedido no tiene un producto asociado.');
+
+                const productRef = doc(db, 'scm_productos', order.producto_id);
+                const productSnapshot = await transaction.get(productRef);
+                if (!productSnapshot.exists()) throw new Error('El producto del pedido ya no existe.');
+                const product = productSnapshot.data();
+                const amount = Number(order.cantidad || 0);
+                if (!Number.isFinite(amount) || amount <= 0) throw new Error('La cantidad del pedido no es válida.');
+                const isSale = order.tipo === 'venta';
+                const movementType = isSale ? 'salida' : 'entrada';
+                const reason = isSale ? 'venta' : 'reposicion';
+                const nextStock = Number(product.stock_actual || 0) + (isSale ? -amount : amount);
+                if (nextStock < 0) throw new Error('Stock insuficiente para surtir este pedido de venta.');
+
+                let shouldCreatePushOrder = false;
+                const otherPendingOrder = pendingPushOrder(order.producto_id, orderId);
+                if (product.estrategia_logistica === 'PUSH' && nextStock <= Number(product.stock_minimo || 0)) {
+                    shouldCreatePushOrder = !otherPendingOrder && (!product.reposicion_pendiente_id || product.reposicion_pendiente_id === orderId);
+                }
+
+                const timestamp = new Date().toISOString();
+                const productUpdates = { stock_actual: nextStock };
+                if (shouldCreatePushOrder) productUpdates.reposicion_pendiente_id = automaticOrderRef.id;
+                else if (product.estrategia_logistica === 'PUSH' && otherPendingOrder) productUpdates.reposicion_pendiente_id = otherPendingOrder.id;
+                else if (product.reposicion_pendiente_id === orderId) productUpdates.reposicion_pendiente_id = null;
+                transaction.update(productRef, productUpdates);
+                transaction.update(orderRef, { estado: 'surtido', fecha_surtido: timestamp });
+                transaction.set(movementRef, {
+                    producto_id: order.producto_id,
+                    tipo: movementType,
+                    cantidad: amount,
+                    motivo: reason,
+                    fecha: timestamp,
+                    pedido_id: orderId
+                });
+                if (shouldCreatePushOrder) {
+                    const minimum = Number(product.stock_minimo || 0);
+                    transaction.set(automaticOrderRef, {
+                        producto_id: order.producto_id,
+                        cantidad: Math.max(minimum * 2 - nextStock, minimum, 1),
+                        tipo: 'reposicion',
+                        estado: 'pendiente',
+                        fecha: timestamp,
+                        origen: 'automatico_push'
+                    });
+                }
+            });
+        }
 
         function communityProducts() {
             const result = [];
@@ -86,7 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const sources = [...campingCatalog, ...communityProducts().filter(item => !['hola', 'sd'].includes(String(item.name || '').toLowerCase()) && isCampingText(`${item.name} ${item.description}`)).map(item => ({
                 nombre: item.name, descripcion: item.description || '', categoria: 'comunidad', stock_actual: Number(item.stock || 1), stock_minimo: 1,
                 costo_unitario: Number(item.price || 0), estrategia_logistica: 'PULL', origen: 'comunidad', publicacion_id: String(item.id), publicacion_key: item.publicationKey,
-                imagenes: normalizeImageList(item.images || item.imagenes || item.photos || item.photo), imagen_url: normalizeImageList(item.images || item.imagenes || item.photos || item.photo)[0] || ''
+                imagenes: normalizeImageList(item.images || item.imagenes || item.photos || item.photo), imagen_url: normalizeImageList(item.images || item.imagenes || item.photos || item.photo)[0] || '',
+                created_at: item.created_at || item.createdAt || item.fecha_alta || item.fecha || new Date().toISOString()
             }))];
             for (const source of sources) {
                 const existing = products.find(item => item.nombre === source.nombre && (source.publicacion_id ? item.publicacion_id === source.publicacion_id : !item.publicacion_id));
@@ -200,6 +340,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const total = Math.max(1, Math.ceil(items.length / perPage)); page[type] = Math.min(page[type], total);
             return { visible: items.slice((page[type] - 1) * perPage, page[type] * perPage), total };
         };
+        const productAddedTime = item => {
+            const value = item.created_at || item.fecha_alta || item.createdAt || item.fecha_creacion;
+            if (typeof value?.toMillis === 'function') return value.toMillis();
+            const parsed = value ? new Date(value).getTime() : 0;
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        const sortProducts = (items, mode) => [...items].sort((a, b) => {
+            if (mode === 'name') return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' });
+            if (mode === 'category') return String(a.categoria || '').localeCompare(String(b.categoria || ''), 'es', { sensitivity: 'base' }) || String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' });
+            return productAddedTime(b) - productAddedTime(a) || String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' });
+        });
         const renderPanelPage = (containerId, items, pageKey, emptyText, formatter, pageSize = 3) => {
             const panel = $(containerId); if (!panel) return;
             const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
@@ -222,13 +373,13 @@ document.addEventListener('DOMContentLoaded', () => {
         function renderProducts() {
             const term = ($('scmProductSearch')?.value || '').toLowerCase(), strategy = $('scmStrategyFilter')?.value || '';
             const origin = $('scmOriginFilter')?.value || '';
-            const filtered = relevantProducts().filter(item => `${item.nombre} ${item.categoria}`.toLowerCase().includes(term) && (!strategy || item.estrategia_logistica === strategy) && (!origin || item.origen === origin));
+            const filtered = sortProducts(relevantProducts().filter(item => `${item.nombre} ${item.categoria}`.toLowerCase().includes(term) && (!strategy || item.estrategia_logistica === strategy) && (!origin || item.origen === origin)), $('scmProductSort')?.value || 'recent');
             const result = paginate(filtered, 'products');
             $('scmProductsBody').innerHTML = result.visible.map(item => `<tr><td><button class="scm-product-image-button scm-view-product" type="button" data-id="${item.id}" aria-label="Ver ${item.nombre}">${productImage(item) ? `<img src="${productImage(item)}" alt="">` : '<i class="bi bi-backpack3"></i>'}</button></td><td>${item.nombre}</td><td><span class="source-badge source-${item.origen || 'tienda'}">${item.origen === 'comunidad' ? 'Comunidad' : 'Tienda'}</span></td><td>${item.categoria}</td><td>$${Number(item.costo_unitario || 0).toFixed(2)}</td><td class="${item.stock_actual <= item.stock_minimo ? 'stock-critical' : ''}">${item.stock_actual}</td><td>${supplierName(item.proveedor_id)}</td><td><span class="role-badge ${item.estrategia_logistica === 'PUSH' ? 'role-admin' : 'role-user'}">${item.estrategia_logistica}</span></td><td><div class="table-actions"><button class="btn btn-small scm-view-product" data-id="${item.id}" type="button" aria-label="Ver detalle" title="Ver detalle"><i class="bi bi-eye"></i></button><button class="btn btn-small scm-edit-product" data-id="${item.id}" type="button" aria-label="Editar" title="Editar"><i class="bi bi-pencil"></i></button><button class="btn btn-small scm-delete-product" data-id="${item.id}" type="button" aria-label="Eliminar" title="Eliminar"><i class="bi bi-trash"></i></button></div></td></tr>`).join('') || '<tr><td colspan="9" class="empty-state">No hay equipos en el catálogo.</td></tr>';
             pagination('scmProductsPagination', 'products', result.total);
         }
         function renderInventory() {
-            const result = paginate(relevantProducts(), 'inventory');
+            const result = paginate(sortProducts(relevantProducts(), $('scmInventorySort')?.value || 'recent'), 'inventory');
             $('scmInventoryBody').innerHTML = result.visible.map(item => { const last = movements.filter(m => m.producto_id === item.id).sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0]; return `<tr><td>${item.nombre}</td><td class="${item.stock_actual <= item.stock_minimo ? 'stock-critical' : ''}">${item.stock_actual}</td><td>${item.stock_minimo}</td><td><span class="badge ${item.stock_actual <= item.stock_minimo ? 'badge-warn' : 'badge-ok'}">${item.stock_actual <= item.stock_minimo ? 'Stock bajo' : 'Normal'}</span></td><td>${last ? new Date(last.fecha).toLocaleDateString() : 'Sin movimientos'}</td><td><button class="btn btn-outline scm-history" data-id="${item.id}">Ver historial</button></td></tr>`; }).join('');
             pagination('scmInventoryPagination', 'inventory', result.total);
             renderPanelPage('scmLowStockList', relevantProducts().filter(item => item.stock_actual <= item.stock_minimo), 'inventoryAlerts', '<p class="text-success">No hay productos en riesgo.</p>', item => `<div class="risk-item"><strong>${item.nombre}</strong><span>${item.stock_actual} / mínimo ${item.stock_minimo}</span></div>`);
@@ -320,7 +471,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if ($('scmHomeCritical')) $('scmHomeCritical').textContent = criticalProducts.length;
             if ($('scmHomeStrategies')) $('scmHomeStrategies').innerHTML = `<div class="scm-strategy-card is-push"><strong>${push}</strong><span>PUSH</span><small>Reposición al llegar al mínimo</small></div><div class="scm-strategy-card is-pull"><strong>${pull}</strong><span>PULL</span><small>Reposición bajo pedido</small></div>`;
         }
-        function modal(id, title, fields, onSave) { const root = $('scmModal'); root.querySelector('h3').textContent = title; root.querySelector('.scm-form-fields').innerHTML = fields; root.classList.remove('hidden'); document.body.classList.add('scm-modal-open'); root.querySelector('form').onsubmit = async e => { e.preventDefault(); try { await onSave(new FormData(e.target)); root.classList.add('hidden'); document.body.classList.remove('scm-modal-open'); await reload(); feedback('Cambios guardados correctamente.'); } catch (error) { feedback(error.message || 'No se pudo guardar.', 'error'); } }; }
+        function showScmModalMessage(message, type = 'success') {
+            const messageElement = $('scmModalMessage');
+            if (!messageElement) return;
+            messageElement.textContent = message;
+            messageElement.className = `scm-modal-message ${type}`;
+            messageElement.classList.remove('hidden');
+        }
+        function modal(id, title, fields, onSave) {
+            const root = $('scmModal');
+            root.querySelector('h3').textContent = title;
+            root.querySelector('.scm-form-fields').innerHTML = fields;
+            $('scmModalMessage')?.classList.add('hidden');
+            root.classList.remove('hidden');
+            document.body.classList.add('scm-modal-open');
+            root.querySelector('form').onsubmit = async event => {
+                event.preventDefault();
+                try {
+                    const result = await onSave(new FormData(event.target));
+                    await reload();
+                    const feedbackProductId = result?.movement?.productId || result?.lowStockProductId;
+                    if (feedbackProductId) {
+                        const product = products.find(item => item.id === feedbackProductId);
+                        const stock = Number(product?.stock_actual || 0);
+                        const minimum = Number(product?.stock_minimo || 0);
+                        const wasPush = product?.estrategia_logistica === 'PUSH';
+                        if (wasPush && stock > minimum && (result?.movement?.restockQueued || result?.lowStockProductId)) showScmModalMessage(`Reposición PUSH aplicada automáticamente. Stock actual: ${stock}.`);
+                        else if (stock <= minimum) showScmModalMessage(`Stock bajo (${stock} / mínimo ${minimum}). ${wasPush ? 'Hay un pedido de reposición pendiente.' : 'La estrategia PULL requiere solicitar la reposición.'}`, 'warning');
+                        else showScmModalMessage(`Movimiento registrado. Stock actual: ${stock}.`);
+                        return;
+                    }
+                    root.classList.add('hidden');
+                    document.body.classList.remove('scm-modal-open');
+                    feedback('Cambios guardados correctamente.');
+                } catch (error) {
+                    showScmModalMessage(error.message || 'No se pudo guardar.', 'error');
+                }
+            };
+        }
         async function readProductForm(data, existing) {
             const result = Object.fromEntries(data);
             const gallery = [];
@@ -350,7 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedProductImages = gallery.map(src => ({ src, file: null }));
             const options = categoryOptions().map(category => `<option value="${category}" ${category === selectedCategory ? 'selected' : ''}>${category}</option>`).join('');
             return `<div class="scm-image-upload"><div class="scm-image-upload-head"><div><strong>Fotos del equipo</strong><span>Las fotos actuales se conservan; puedes añadir o quitar imágenes.</span></div><label for="scmImageFile" class="scm-image-trigger"><i class="bi bi-image"></i> Añadir fotos</label></div><input id="scmImageFile" class="scm-image-input" name="imagen_archivo" type="file" accept="image/*" multiple><div id="scmImageGallery" class="scm-image-grid">${productImageCards() || '<p class="scm-image-empty">Aún no hay fotos seleccionadas.</p>'}</div><span id="scmImageCount" class="scm-image-count">${gallery.length} ${gallery.length === 1 ? 'foto' : 'fotos'}</span></div><label>Nombre<input name="nombre" required value="${item.nombre || ''}"></label><label>Descripción<textarea name="descripcion">${item.descripcion || ''}</textarea></label><label>Categoría<select name="categoria" required>${options}</select></label><label>Otra categoría<input name="nueva_categoria" placeholder="Ej: botas o cocina" value=""></label><label>Stock actual<input name="stock_actual" type="number" min="0" required value="${item.stock_actual ?? 0}"></label><label>Stock mínimo<input name="stock_minimo" type="number" min="0" required value="${item.stock_minimo ?? 0}"></label><label>Proveedor<select name="proveedor_id" required>${suppliers.map(s => `<option value="${s.id}" ${s.id === item.proveedor_id ? 'selected' : ''}>${s.nombre}</option>`).join('')}</select></label><label>Costo unitario<input name="costo_unitario" type="number" min="0" step="0.01" required value="${item.costo_unitario ?? 0}"></label><label>Estrategia<select name="estrategia_logistica"><option value="PUSH" ${item.estrategia_logistica === 'PUSH' ? 'selected' : ''}>PUSH</option><option value="PULL" ${item.estrategia_logistica === 'PULL' ? 'selected' : ''}>PULL</option></select></label>`; }
-        function editProduct(item) { modal('scmModal', 'Editar equipo', productFields(item), async data => save('scm_productos', item.id, await readProductForm(data, item))); }
+        function editProduct(item) { modal('scmModal', 'Editar equipo', productFields(item), async data => { const product = await readProductForm(data, item); await save('scm_productos', item.id, product); return product.stock_actual <= product.stock_minimo ? { lowStockProductId: item.id } : null; }); }
         async function reload() {
             products = await read('scm_productos');
             const invalidProducts = products.filter(item => ['hola', 'sd'].includes(String(item.nombre || '').toLowerCase()));
@@ -359,6 +547,16 @@ document.addEventListener('DOMContentLoaded', () => {
             suppliers = await read('scm_proveedores');
             movements = await read('scm_movimientos');
             orders = await read('scm_pedidos');
+            let autoRestocksCompleted = false;
+            const lowPushProducts = products.filter(product => product.estrategia_logistica === 'PUSH' && Number(product.stock_actual || 0) <= Number(product.stock_minimo || 0));
+            for (const product of lowPushProducts) {
+                if (await ensurePushRestockOrder(product.id)) autoRestocksCompleted = true;
+            }
+            if (autoRestocksCompleted) {
+                products = await read('scm_productos');
+                movements = await read('scm_movimientos');
+                orders = await read('scm_pedidos');
+            }
             saveSharedCategories([...readSharedCategories(), ...products.map(item => item.categoria)]);
             syncCommunityPublications();
             localStorage.setItem('scm_catalog_cache', JSON.stringify(products));
@@ -366,6 +564,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         document.querySelectorAll('.nav-link[data-view^="scm-"]').forEach(link => link.addEventListener('click', () => { setTimeout(() => { const title = { 'scm-dashboard': 'Dashboard SCM', 'scm-productos': 'Productos SCM', 'scm-inventario': 'Inventario', 'scm-proveedores': 'Proveedores', 'scm-pedidos': 'Pedidos SCM', 'scm-reportes': 'Reportes SCM' }[link.dataset.view]; if ($('pageTitle')) $('pageTitle').textContent = title; }, 0); }));
         $('scmProductSearch')?.addEventListener('input', () => { page.products = 1; renderProducts(); }); $('scmStrategyFilter')?.addEventListener('change', () => { page.products = 1; renderProducts(); }); $('scmOriginFilter')?.addEventListener('change', () => { page.products = 1; renderProducts(); });
+        $('scmProductSort')?.addEventListener('change', () => { page.products = 1; renderProducts(); });
+        $('scmInventorySort')?.addEventListener('change', () => { page.inventory = 1; renderInventory(); });
         $('scmSupplierSearch')?.addEventListener('input', renderSuppliers);
         document.addEventListener('change', event => {
             if (event.target.id !== 'scmImageFile' || !event.target.files?.length) return;
@@ -393,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         document.querySelectorAll('.scm-shortcut').forEach(button => button.addEventListener('click', () => document.querySelector(`.nav-link[data-view="${button.dataset.view}"]`)?.click()));
         document.addEventListener('click', async event => { const button = event.target.closest('[data-scm-page]'); if (button) { page[button.dataset.type] += button.dataset.scmPage === 'next' ? 1 : -1; await reload(); return; }
-            if (event.target.closest('#openScmProductModal')) return modal('scmModal', 'Nuevo equipo de camping', productFields(), async data => save('scm_productos', null, await readProductForm(data, null)));
+            if (event.target.closest('#openScmProductModal')) return modal('scmModal', 'Nuevo equipo de camping', productFields(), async data => { const product = await readProductForm(data, null); product.created_at = new Date().toISOString(); const created = await save('scm_productos', null, product); return product.stock_actual <= product.stock_minimo ? { lowStockProductId: created.id } : null; });
             const productEdit = event.target.closest('.scm-edit-product, #scmProductDetailEdit'); if (productEdit) { const item = products.find(p => p.id === productEdit.dataset.id); if (item) { $('scmProductDetailModal').classList.add('hidden'); return editProduct(item); } }
             const productDetail = event.target.closest('.scm-view-product'); if (productDetail) { showProductDetail(productDetail.dataset.id); return; }
             const productDelete = event.target.closest('.scm-delete-product'); if (productDelete) { pendingDelete = { collection: 'scm_productos', id: productDelete.dataset.id, label: products.find(p => p.id === productDelete.dataset.id)?.nombre || 'producto' }; $('scmDeleteText').textContent = `¿Deseas eliminar el ${pendingDelete.label}?`; $('scmDeleteModal').classList.remove('hidden'); }
@@ -401,9 +601,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const supplierEdit = event.target.closest('.scm-edit-supplier'); if (supplierEdit) { const item = suppliers.find(s => s.id === supplierEdit.dataset.id); return modal('scmModal', 'Editar proveedor', `<label>Nombre<input name="nombre" required value="${item.nombre}"></label><label>Contacto<input name="contacto" required value="${item.contacto}"></label><label>Correo<input name="correo" type="email" required value="${item.correo}"></label><label>Teléfono<input name="telefono" required value="${item.telefono}"></label>`, async data => save('scm_proveedores', item.id, Object.fromEntries(data))); }
             const supplierDelete = event.target.closest('.scm-delete-supplier'); if (supplierDelete) { pendingDelete = { collection: 'scm_proveedores', id: supplierDelete.dataset.id, label: suppliers.find(s => s.id === supplierDelete.dataset.id)?.nombre || 'proveedor' }; $('scmDeleteText').textContent = `¿Deseas eliminar el ${pendingDelete.label}?`; $('scmDeleteModal').classList.remove('hidden'); }
             const historyButton = event.target.closest('.scm-history'); if (historyButton) { renderHistory(historyButton.dataset.id); return; }
-            const movementButton = event.target.closest('#openMovementModal'); if (movementButton) return modal('scmModal', 'Registrar movimiento', `<label>Producto<select name="producto_id">${products.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}</select></label><label>Tipo<select name="tipo"><option>entrada</option><option>salida</option></select></label><label>Cantidad<input name="cantidad" type="number" min="1" required></label><label>Motivo<select name="motivo"><option>venta</option><option>ajuste</option><option>reposicion</option></select></label>`, async data => { const item = products.find(p => p.id === data.get('producto_id')); const amount = Number(data.get('cantidad')); const type = data.get('tipo'); const stock = Number(item.stock_actual) + (type === 'entrada' ? amount : -amount); if (stock < 0) throw new Error('Stock insuficiente'); await updateDoc(doc(db, 'scm_productos', item.id), { stock_actual: stock }); await save('scm_movimientos', null, { ...Object.fromEntries(data), cantidad: amount, fecha: new Date().toISOString() }); const hasPendingPush = orders.some(order => order.producto_id === item.id && order.tipo === 'reposicion' && order.estado === 'pendiente'); if (item.estrategia_logistica === 'PUSH' && stock <= item.stock_minimo && !hasPendingPush) await save('scm_pedidos', null, { producto_id: item.id, cantidad: Math.max(item.stock_minimo * 2 - stock, item.stock_minimo), tipo: 'reposicion', estado: 'pendiente', fecha: new Date().toISOString(), origen: 'automatico_push' }); });
+            const movementButton = event.target.closest('#openMovementModal'); if (movementButton) return modal('scmModal', 'Registrar movimiento', `<label>Producto<select name="producto_id">${products.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}</select></label><label>Tipo<select name="tipo"><option>entrada</option><option>salida</option></select></label><label>Cantidad<input name="cantidad" type="number" min="1" required></label><label>Motivo<select name="motivo"><option>venta</option><option>ajuste</option><option>reposicion</option></select></label>`, async data => { const amount = Number(data.get('cantidad')); if (!Number.isInteger(amount) || amount < 1) throw new Error('La cantidad debe ser un número entero mayor que cero.'); return { movement: await recordInventoryMovement(data.get('producto_id'), amount, data.get('tipo'), data.get('motivo')) }; });
             if (event.target.closest('#openOrderModal')) return modal('scmModal', 'Generar pedido', `<label>Producto<select name="producto_id">${products.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}</select></label><label>Cantidad<input name="cantidad" type="number" min="1" required></label><label>Tipo<select name="tipo"><option>reposicion</option><option>venta</option></select></label>`, async data => save('scm_pedidos', null, { ...Object.fromEntries(data), cantidad: Number(data.get('cantidad')), estado: 'pendiente', fecha: new Date().toISOString() }));
-            const supply = event.target.closest('.scm-supply-order'); if (supply) { const order = orders.find(o => o.id === supply.dataset.id); await updateDoc(doc(db, 'scm_pedidos', order.id), { estado: 'surtido' }); await reload(); }
+            const supply = event.target.closest('.scm-supply-order'); if (supply) { try { await fulfillSupplyOrder(supply.dataset.id); await reload(); feedback('Pedido surtido e inventario actualizado.'); } catch (error) { feedback(error.message || 'No se pudo surtir el pedido.', 'error'); } return; }
             if (event.target.closest('#saveScmLevel')) { const level = $('scmLevelSelect').value; const config = (await read('scm_config'))[0]; await save('scm_config', config?.id, { nivel_scm: level, actualizado: new Date().toISOString() }); feedback('Nivel SCM actualizado.'); await renderReports(); }
         });
         document.addEventListener('click', async event => { if (event.target.closest('#scmModalClose, #scmModalCancel') || event.target.matches('#scmModal > .modal-backdrop')) { $('scmModal')?.classList.add('hidden'); document.body.classList.remove('scm-modal-open'); } if (event.target.closest('#scmHistoryClose')) $('scmHistoryModal')?.classList.add('hidden'); if (event.target.closest('#scmProductDetailClose') || event.target.id === 'scmProductDetailModal') $('scmProductDetailModal')?.classList.add('hidden'); if (event.target.closest('#scmDeleteCancel')) { pendingDelete = null; $('scmDeleteModal').classList.add('hidden'); } if (event.target.closest('#scmDeleteAccept') && pendingDelete) { await remove(pendingDelete.collection, pendingDelete.id); $('scmDeleteModal').classList.add('hidden'); feedback('Registro eliminado.'); pendingDelete = null; await reload(); } });
