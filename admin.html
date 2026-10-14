@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="styles/admin.css" />
+    <link rel="stylesheet" href="styles/erp.css" />
 </head>
 <body>
     <div class="admin-shell">
@@ -31,8 +32,8 @@
                 <button type="button" class="nav-link" data-view="promociones"><i class="bi bi-percent"></i><span>Promociones</span></button>
                 <button type="button" class="nav-link" data-view="clientes"><i class="bi bi-people"></i><span>Clientes</span></button>
                 <button type="button" class="nav-link" data-view="reportes"><i class="bi bi-bar-chart"></i><span>Reportes</span></button>
-                <div class="sidebar-divider"></div>
-                <p class="sidebar-section-label">SCM</p>
+                <div class="sidebar-divider" data-role-group="scm"></div>
+                <p class="sidebar-section-label" data-role-group="scm">SCM</p>
                 <button type="button" class="nav-link" data-view="scm-dashboard"><i class="bi bi-speedometer2"></i><span>Dashboard SCM</span></button>
                 <button type="button" class="nav-link" data-view="scm-productos"><i class="bi bi-boxes"></i><span>Productos</span></button>
                 <button type="button" class="nav-link" data-view="scm-inventario"><i class="bi bi-clipboard-data"></i><span>Inventario</span></button>
@@ -40,7 +41,10 @@
                 <button type="button" class="nav-link" data-view="scm-pedidos"><i class="bi bi-receipt"></i><span>Pedidos</span></button>
                 <button type="button" class="nav-link" data-view="scm-reportes"><i class="bi bi-bar-chart-steps"></i><span>Reportes SCM</span></button>
                 <div class="sidebar-divider"></div>
-                <p class="sidebar-section-label">CRM</p>
+                <p class="sidebar-section-label" data-role-group="erp">ERP</p>
+                <button type="button" class="nav-link" data-view="erp"><i class="bi bi-diagram-3"></i><span>Operación ERP</span></button>
+                <div class="sidebar-divider" data-role-group="crm"></div>
+                <p class="sidebar-section-label" data-role-group="crm">CRM</p>
                 <button type="button" class="nav-link" data-view="crm"><i class="bi bi-person-rolodex"></i><span>Gestión CRM</span></button>
                 <button type="button" class="nav-link" data-view="interacciones"><i class="bi bi-chat-dots"></i><span>Interacciones</span></button>
                 <button type="button" class="nav-link" data-view="dashboard-crm"><i class="bi bi-graph-up"></i><span>Dashboard CRM</span></button>
@@ -448,6 +452,48 @@
                 <section class="panel-card"><div class="panel-head"><h3>Catálogo SCM</h3><p>Equipo de camping de la tienda y publicaciones de la comunidad</p></div><div class="table-wrap"><table><thead><tr><th>Imagen</th><th>Equipo</th><th>Origen</th><th>Categoría</th><th>Precio/costo</th><th>Stock</th><th>Proveedor</th><th>Estrategia</th><th>Acciones</th></tr></thead><tbody id="scmProductsBody"></tbody></table></div><div id="scmProductsPagination" class="pagination-row"></div></section>
             </section>
 
+            <section id="view-erp" class="view-section">
+                <div class="erp-heading"><div><p class="eyebrow">PLATAFORMA INTEGRADA</p><h3>Planificación de Recursos Empresariales</h3><p>CRM, ventas e inventario conectados en un solo flujo operativo.</p></div><span id="erpRoleBadge" class="erp-role-badge"></span></div>
+                <nav class="erp-tabs" role="tablist" aria-label="Secciones ERP">
+                    <button type="button" class="erp-tab active" data-erp-tab="dashboard"><i class="bi bi-grid-1x2"></i> Resumen</button>
+                    <button type="button" class="erp-tab" data-erp-tab="orders"><i class="bi bi-receipt"></i> Órdenes</button>
+                    <button type="button" class="erp-tab" data-erp-tab="processes"><i class="bi bi-arrow-repeat"></i> Procesos</button>
+                    <button type="button" class="erp-tab" data-erp-tab="resources"><i class="bi bi-boxes"></i> Recursos</button>
+                    <button type="button" class="erp-tab" data-erp-tab="maturity"><i class="bi bi-speedometer2"></i> Nivel ERP</button>
+                    <button type="button" class="erp-tab" data-erp-tab="reports"><i class="bi bi-bar-chart"></i> Reportes</button>
+                </nav>
+                <div id="erpNotice" class="erp-notice hidden" role="status" aria-live="polite"></div>
+
+                <section class="erp-panel active" data-erp-panel="dashboard">
+                    <div class="erp-kpi-grid">
+                        <article class="erp-kpi"><span>Ventas procesadas</span><strong id="erpSalesTotal">$0</strong><small>Órdenes ERP</small></article>
+                        <article class="erp-kpi"><span>Órdenes procesadas</span><strong id="erpOrdersProcessed">0</strong><small id="erpOrdersPending">0 pendientes</small></article>
+                        <article class="erp-kpi"><span>Productos vendidos</span><strong id="erpProductsSold">0</strong><small>Unidades confirmadas</small></article>
+                        <article class="erp-kpi"><span>Clientes activos</span><strong id="erpActiveClients">0</strong><small>Fuente: CRM</small></article>
+                        <article class="erp-kpi"><span>Inventario disponible</span><strong id="erpInventoryUnits">0</strong><small id="erpInventorySkus">0 productos</small></article>
+                    </div>
+                    <div class="erp-dashboard-grid"><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Ventas de los últimos seis meses</h3><p>Órdenes procesadas</p></div></div><div id="erpSalesChart" class="erp-sales-chart"></div></article><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Integración de módulos</h3><p>Fuentes vivas de la plataforma</p></div></div><div id="erpIntegrationStatus" class="erp-integration-list"></div></article></div>
+                    <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Órdenes recientes</h3><p>Seguimiento de la operación</p></div><button type="button" class="btn btn-outline" data-erp-open-tab="orders">Ver órdenes</button></div><div id="erpRecentOrders" class="table-wrap"></div></article>
+                </section>
+
+                <section class="erp-panel" data-erp-panel="orders">
+                    <div class="erp-dashboard-grid erp-order-layout">
+                        <article class="panel-card erp-panel-card erp-order-builder"><div class="panel-head"><div><h3>Nueva orden</h3><p>Selecciona cliente y productos disponibles.</p></div><span class="erp-step-indicator">VENTA</span></div>
+                            <label class="erp-field">Cliente CRM<select id="erpClientSelect"><option value="">Seleccionar cliente</option></select></label>
+                            <div class="erp-add-line"><label class="erp-field">Producto SCM<select id="erpProductSelect"><option value="">Seleccionar producto</option></select></label><label class="erp-field erp-quantity-field">Cantidad<input id="erpProductQuantity" type="number" min="1" value="1"></label><button id="erpAddProduct" class="btn btn-outline erp-add-line-button" type="button" aria-label="Agregar producto" title="Agregar producto"><i class="bi bi-plus-lg"></i></button></div>
+                            <div id="erpDraftLines" class="erp-draft-lines"><p class="erp-empty">Agrega productos para calcular el total.</p></div><div class="erp-order-total"><span>Total de la orden</span><strong id="erpDraftTotal">$0.00</strong></div><button id="erpCreateOrder" class="btn btn-primary erp-submit-order" type="button" disabled><i class="bi bi-check2-circle"></i> Crear orden</button>
+                        </article>
+                        <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Flujo de operación</h3><p>El inventario se descuenta al procesar.</p></div></div><ol class="erp-flow"><li><span>1</span><div><strong>Crear orden</strong><small>Cliente CRM y productos SCM</small></div></li><li><span>2</span><div><strong>Confirmar operación</strong><small>Validación de disponibilidad</small></div></li><li><span>3</span><div><strong>Actualizar módulos</strong><small>Stock, movimiento e historial ERP</small></div></li></ol><div id="erpOrderProcessStatus" class="erp-process-status"><i class="bi bi-info-circle"></i><span>Selecciona una orden pendiente para procesarla.</span></div></article>
+                    </div>
+                    <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Órdenes empresariales</h3><p>Historial integrado con CRM y SCM</p></div><label class="erp-compact-filter">Estado<select id="erpOrderStatusFilter"><option value="">Todos</option><option value="pendiente">Pendientes</option><option value="procesada">Procesadas</option></select></label></div><div id="erpOrdersTable" class="table-wrap"></div></article>
+                </section>
+
+                <section class="erp-panel" data-erp-panel="processes"><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Procesamiento de órdenes</h3><p>Historial automático de inventario y operación.</p></div></div><div id="erpProcessesTable" class="table-wrap"></div></article></section>
+                <section class="erp-panel" data-erp-panel="resources"><div class="erp-dashboard-grid"><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Recursos empresariales</h3><p>Registra recursos internos sin duplicar clientes, productos o usuarios.</p></div></div><form id="erpResourceForm" class="erp-resource-form"><label class="erp-field">Nombre<input name="nombre" maxlength="80" required placeholder="Ej. Centro de distribución"></label><label class="erp-field">Tipo<select name="tipo"><option value="infraestructura">Infraestructura</option><option value="equipo">Equipo</option><option value="operacion">Operación</option></select></label><label class="erp-field">Responsable<select id="erpResourceOwner" name="responsable_id"><option value="">Sin asignar</option></select></label><button class="btn btn-primary" type="submit"><i class="bi bi-plus-circle"></i> Registrar recurso</button></form></article><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Fuentes conectadas</h3><p>Registros leídos en tiempo real</p></div></div><div id="erpResourceSourceSummary" class="erp-resource-summary"></div></article></div><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Recursos internos</h3><p>Colección erp_recursos</p></div></div><div id="erpResourcesTable" class="table-wrap"></div></article></section>
+                <section class="erp-panel" data-erp-panel="maturity"><div class="erp-dashboard-grid"><article class="panel-card erp-panel-card erp-maturity-card"><div class="panel-head"><div><h3>Nivel de implementación ERP</h3><p>Avance en integración y automatización.</p></div><span id="erpMaturityBadge" class="erp-level-badge">Básico</span></div><div class="erp-maturity-track"><span id="erpMaturityProgress"></span></div><div id="erpMaturitySteps" class="erp-maturity-steps"></div></article><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Actualizar nivel</h3><p>Solo administración</p></div></div><form id="erpMaturityForm" class="erp-maturity-form"><label class="erp-field">Nivel<select id="erpMaturitySelect" name="nivel"><option>Básico</option><option>Integrado</option><option>Automatizado</option><option>Optimizado</option></select></label><button class="btn btn-primary" type="submit"><i class="bi bi-check2"></i> Guardar nivel</button></form><ul id="erpMaturityChecklist" class="erp-checklist"></ul></article></div></section>
+                <section class="erp-panel" data-erp-panel="reports"><div class="erp-kpi-grid"><article class="erp-kpi"><span>Ventas totales</span><strong id="erpReportSales">$0</strong><small>Órdenes procesadas</small></article><article class="erp-kpi"><span>Órdenes procesadas</span><strong id="erpReportOrders">0</strong><small>Historial ERP</small></article><article class="erp-kpi"><span>Productos vendidos</span><strong id="erpReportProducts">0</strong><small>Unidades</small></article><article class="erp-kpi"><span>Clientes activos</span><strong id="erpReportClients">0</strong><small>CRM</small></article><article class="erp-kpi"><span>Inventario</span><strong id="erpReportInventory">0</strong><small>Unidades disponibles</small></article></div><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Reportes registrados</h3><p>Resumen de operaciones procesadas</p></div></div><div id="erpReportsTable" class="table-wrap"></div></article></section>
+            </section>
+
             <section id="view-scm-inventario" class="view-section">
                 <section class="panel-card"><div class="panel-head"><div><h3>Inventario y trazabilidad</h3><p>Las entradas y salidas actualizan stock automáticamente.</p></div><div class="scm-inventory-actions"><label class="scm-sort-control" for="scmInventorySort"><span>Ordenar</span><select id="scmInventorySort"><option value="recent">Más recientes</option><option value="name">Alfabético</option><option value="category">Categoría</option></select></label><button id="openMovementModal" class="btn btn-primary" type="button"><i class="bi bi-arrow-left-right"></i> Registrar movimiento</button></div></div><div class="table-wrap"><table><thead><tr><th>Equipo</th><th>Stock</th><th>Mínimo</th><th>Estado</th><th>Último movimiento</th><th>Historial</th></tr></thead><tbody id="scmInventoryBody"></tbody></table></div><div id="scmInventoryPagination" class="pagination-row"></div></section>
                 <section class="panel-card scm-low-stock"><div class="panel-head"><h3>Alertas de stock crítico</h3></div><div id="scmLowStockList"></div></section>
@@ -558,7 +604,7 @@
                             <h3>Usuarios y permisos</h3>
                             <p>Asigna el rol de administrador a usuarios registrados.</p>
                         </div>
-                        <button id="openUserModal" class="btn btn-primary" type="button"><i class="bi bi-person-plus"></i> Nuevo usuario</button>
+                        <p class="user-auth-note">Las cuentas se crean en Firebase Authentication. Aquí se asignan los roles a perfiles verificados.</p>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -826,7 +872,7 @@
         <div class="modal-backdrop" id="crmClientDetailBackdrop"></div><div class="modal-content"><button class="modal-close" id="crmClientDetailClose" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-person-vcard"></i></div><h3 id="crmDetailName"></h3><p id="crmDetailEmail" class="modal-meta"></p><p id="crmDetailPhone" class="modal-meta"></p><p id="crmDetailCompany" class="modal-meta"></p><p id="crmDetailEstado" class="modal-meta"></p><p id="crmDetailEtapa" class="modal-meta"></p><div class="field-group"><label for="crmDetailEtapaSelect">Cambiar etapa CRM</label><select id="crmDetailEtapaSelect"><option value="Prospecto">Prospecto</option><option value="Activo">Activo</option><option value="Frecuente">Frecuente</option><option value="Inactivo">Inactivo</option></select></div><button id="crmDetailEtapaBtn" class="btn btn-primary" type="button">Guardar etapa</button><hr><h4>Interacciones</h4><div id="crmDetailInteracciones"></div></div></div>
     </div>
 
-    <div id="userModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="userModalTitle"><div class="modal-backdrop" id="userModalBackdrop"></div><div class="modal-content"><button class="modal-close" id="userModalClose" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-person-gear"></i></div><h3 id="userModalTitle">Nuevo usuario</h3><form id="userForm" class="product-form modal-form"><div class="field-group"><label for="userNameInput">Nombre</label><input id="userNameInput" name="nombre" required></div><div class="field-group"><label for="userEmailInput">Correo electrónico</label><input id="userEmailInput" name="email" type="email" required></div><div class="field-group"><label for="userRoleInput">Rol</label><select id="userRoleInput" name="rol"><option value="usuario">Usuario</option><option value="admin">Administrador</option></select></div><div class="form-actions"><button id="userModalCancel" class="btn btn-outline" type="button">Cancelar</button><button class="btn btn-primary" type="submit">Guardar usuario</button></div></form></div></div></div>
+    <div id="userModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="userModalTitle"><div class="modal-backdrop" id="userModalBackdrop"></div><div class="modal-content"><button class="modal-close" id="userModalClose" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-person-gear"></i></div><h3 id="userModalTitle">Editar perfil autenticado</h3><form id="userForm" class="product-form modal-form"><div class="field-group"><label for="userNameInput">Nombre</label><input id="userNameInput" name="nombre" required></div><div class="field-group"><label for="userEmailInput">Correo electrónico</label><input id="userEmailInput" name="email" type="email" readonly required></div><div class="field-group"><label for="userRoleInput">Rol</label><select id="userRoleInput" name="rol"><option value="usuario">Usuario</option><option value="ventas">Ventas</option><option value="logistica">Logística</option><option value="admin">Administrador</option></select></div><div class="form-actions"><button id="userModalCancel" class="btn btn-outline" type="button">Cancelar</button><button class="btn btn-primary" type="submit">Guardar perfil</button></div></form></div></div></div>
 
     <div id="saveConfirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle"><div class="modal-backdrop"></div><div class="modal-content"><div class="modal-body"><div class="modal-icon"><i class="bi bi-check2-circle"></i></div><h3 id="saveConfirmTitle">Confirmar cambios</h3><p id="saveConfirmText" class="modal-description">¿Deseas guardar los cambios?</p><div class="form-actions"><button id="saveConfirmCancel" class="btn btn-outline" type="button">Cancelar</button><button id="saveConfirmAccept" class="btn btn-primary" type="button">Confirmar y guardar</button></div></div></div></div>
 
@@ -841,6 +887,7 @@
     <script src="js/admin.js"></script>
     <script src="js/crm.js"></script>
     <script src="js/scm.js"></script>
+    <script src="js/erp.js"></script>
     <script>
         // This script is added to handle form validation since admin.js is not provided for modification.
         document.addEventListener('DOMContentLoaded', () => {

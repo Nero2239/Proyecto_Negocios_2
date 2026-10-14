@@ -1,12 +1,57 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const userEmail = localStorage.getItem('userEmail') || '';
-    const userRole = localStorage.getItem('userRole') || '';
-    const isLoggedIn = localStorage.getItem('isLoggedIn') === '1' || Boolean(userEmail);
-
-    if (!isLoggedIn || (userRole !== 'admin' && !userEmail.toLowerCase().includes('admin'))) {
+document.addEventListener('DOMContentLoaded', async () => {
+    const firebaseConfig = {
+        apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
+        authDomain: 'camping-3a6a4.firebaseapp.com',
+        projectId: 'camping-3a6a4',
+        storageBucket: 'camping-3a6a4.firebasestorage.app',
+        messagingSenderId: '181839243079',
+        appId: '1:181839243079:web:df39441f32098fc7ca4e62'
+    };
+    let firebaseUser;
+    let userProfile;
+    try {
+        const [{ initializeApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, getDoc }] = await Promise.all([
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
+        ]);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        firebaseUser = await new Promise(resolve => {
+            const unsubscribe = onAuthStateChanged(auth, user => { unsubscribe(); resolve(user); }, () => resolve(null));
+        });
+        if (!firebaseUser?.emailVerified) throw new Error('No hay una sesión verificada.');
+        const profileSnapshot = await getDoc(doc(db, 'usuarios', firebaseUser.uid));
+        if (!profileSnapshot.exists()) throw new Error('No existe un perfil de acceso para esta cuenta.');
+        userProfile = profileSnapshot.data();
+    } catch (error) {
+        console.warn('Acceso al panel denegado:', error.message);
         window.location.href = 'login.html';
         return;
     }
+
+    const userEmail = String(firebaseUser.email || '').toLowerCase();
+    const userRole = String(userProfile.rol || '').toLowerCase();
+    if (!['admin', 'ventas', 'logistica'].includes(userRole) || userProfile.auth_uid !== firebaseUser.uid) {
+        window.location.href = 'profile.html';
+        return;
+    }
+    localStorage.setItem('userEmail', userEmail);
+    localStorage.setItem('userUid', firebaseUser.uid);
+    localStorage.setItem('userName', userProfile.nombre || firebaseUser.displayName || userEmail.split('@')[0]);
+    localStorage.setItem('userRole', userRole);
+    localStorage.setItem('isLoggedIn', '1');
+    const allowedViewsByRole = {
+        ventas: new Set(['dashboard', 'crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'erp']),
+        logistica: new Set(['dashboard', 'scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes', 'erp'])
+    };
+    const roleViews = allowedViewsByRole[userRole];
+    const roleGroupViews = {
+        crm: ['crm', 'interacciones', 'dashboard-crm', 'mi-actividad'],
+        scm: ['scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes'],
+        erp: ['erp']
+    };
 
     const sidebar = document.getElementById('adminSidebar');
     const sidebarToggle = document.getElementById('sidebarToggle');
@@ -18,6 +63,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const newProductBtn = document.getElementById('newProductBtn');
     const feedbackMessage = document.getElementById('feedbackMessage');
     const adminNameLabel = document.getElementById('adminNameLabel');
+    const roleLabels = { admin: 'Administrador', ventas: 'Ventas', logistica: 'Logística' };
+    if (adminNameLabel) adminNameLabel.textContent = `${localStorage.getItem('userName') || roleLabels[userRole] || 'Usuario'} · ${roleLabels[userRole] || 'Usuario'}`;
+    navLinks.forEach(link => link.classList.toggle('hidden', Boolean(roleViews && !roleViews.has(link.dataset.view))));
+    viewSections.forEach(section => section.classList.toggle('role-view-hidden', Boolean(roleViews && !roleViews.has(section.id.replace('view-', '')))));
+    document.querySelectorAll('[data-role-group]').forEach(element => {
+        const views = roleGroupViews[element.dataset.roleGroup] || [];
+        element.classList.toggle('hidden', Boolean(roleViews && !views.some(view => roleViews.has(view))));
+    });
+    newProductBtn?.classList.toggle('hidden', userRole !== 'admin');
 
     const productSearch = document.getElementById('productSearch');
     const categoryFilter = document.getElementById('categoryFilter');
@@ -199,6 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setView(viewName) {
+        if (roleViews && !roleViews.has(viewName)) viewName = 'erp';
         viewSections.forEach(section => {
             section.classList.toggle('active', section.id === `view-${viewName}`);
         });
@@ -215,6 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'scm-proveedores': 'Proveedores SCM',
             'scm-pedidos': 'Pedidos SCM',
             'scm-reportes': 'Reportes SCM',
+            erp: 'Operación ERP',
             productos: 'Productos',
             pedidos: 'Pedidos',
             promociones: 'Promociones',
@@ -923,7 +979,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('.nav-link[data-view="productos"]').click();
     });
 
-    const defaultView = localStorage.getItem('adminView') || 'dashboard';
+    const savedView = localStorage.getItem('adminView') || 'dashboard';
+    const defaultView = roleViews && !roleViews.has(savedView) ? 'erp' : savedView;
     renderCategoryOptions();
     setView(defaultView);
     renderProducts();

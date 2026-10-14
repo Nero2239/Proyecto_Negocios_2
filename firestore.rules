@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function profilePath() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    }
+
+    function hasProfile() {
+      return signedIn() && exists(profilePath());
+    }
+
+    function hasRole(roleName) {
+      return hasProfile() && get(profilePath()).data.auth_uid == request.auth.uid
+        && get(profilePath()).data.rol == roleName;
+    }
+
+    function isAdmin() { return hasRole('admin'); }
+    function isSales() { return hasRole('ventas'); }
+    function isLogistics() { return hasRole('logistica'); }
+    function isStaff() { return isAdmin() || isSales() || isLogistics(); }
+    function canManageSCM() { return isAdmin() || isLogistics(); }
+
+    function processedERPOrder(orderId) {
+      return orderId is string
+        && getAfter(/databases/$(database)/documents/erp_ordenes/$(orderId)).data.estado == 'procesada';
+    }
+
+    function completedERPOrder(orderId) {
+      return orderId is string
+        && getAfter(/databases/$(database)/documents/erp_ordenes/$(orderId)).data.estado in ['procesada', 'cancelada'];
+    }
+
+    match /usuarios/{userId} {
+      allow get, list: if isAdmin()
+        || (signedIn() && (userId == request.auth.uid || resource.data.email == request.auth.token.email));
+      allow create: if isAdmin()
+        || (signedIn()
+          && userId == request.auth.uid
+          && request.resource.data.auth_uid == request.auth.uid
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.rol == 'usuario'
+          && request.resource.data.keys().hasOnly(['uid', 'auth_uid', 'email', 'nombre', 'rol', 'creado_en']));
+      allow update: if isAdmin()
+        || (signedIn()
+          && userId == request.auth.uid
+          && request.resource.data.auth_uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo_acceso']));
+      allow delete: if isAdmin();
+    }
+
+    match /clientes/{clientId} {
+      allow read: if isStaff() || (signedIn() && resource.data.correo == request.auth.token.email);
+      allow create: if isStaff() || (signedIn() && request.resource.data.correo == request.auth.token.email);
+      allow update, delete: if isAdmin() || isSales();
+    }
+
+    match /interacciones/{interactionId} {
+      allow read: if isAdmin() || isSales();
+      allow create: if isAdmin() || isSales();
+      allow update, delete: if isAdmin() || isSales();
+    }
+
+    match /scm_productos/{productId} {
+      allow read: if true;
+      allow create, delete: if canManageSCM();
+      allow update: if canManageSCM()
+        || (isSales()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock_actual', 'reposicion_pendiente_id', 'ultimo_erp_orden_id'])
+          && processedERPOrder(request.resource.data.ultimo_erp_orden_id));
+    }
+
+    match /scm_proveedores/{supplierId} {
+      allow read: if isStaff();
+      allow create, update, delete: if canManageSCM();
+    }
+
+    match /scm_movimientos/{movementId} {
+      allow read: if isStaff();
+      allow create: if canManageSCM()
+        || (isSales() && processedERPOrder(request.resource.data.erp_orden_id));
+      allow update, delete: if canManageSCM();
+    }
+
+    match /scm_pedidos/{orderId} {
+      allow read: if isStaff();
+      allow create: if canManageSCM()
+        || (isSales()
+          && request.resource.data.tipo == 'reposicion'
+          && request.resource.data.origen == 'automatico_push_erp'
+          && processedERPOrder(request.resource.data.erp_orden_id));
+      allow update: if canManageSCM()
+        || (isSales()
+          && resource.data.tipo == 'reposicion'
+          && resource.data.estado == 'pendiente'
+          && request.resource.data.estado == 'surtido'
+          && processedERPOrder(request.resource.data.erp_orden_id));
+      allow delete: if canManageSCM();
+    }
+
+    match /scm_config/{configId} {
+      allow read: if isStaff();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /erp_ordenes/{orderId} {
+      allow read: if isStaff();
+      allow create: if (isAdmin() || isSales())
+        && request.resource.data.estado == 'pendiente'
+        && request.resource.data.usuario_id == request.auth.uid
+        && request.resource.data.cliente_id is string
+        && request.resource.data.productos is list
+        && request.resource.data.total is number;
+      allow update: if isAdmin()
+        || ((isSales() || isLogistics())
+          && resource.data.estado == 'pendiente'
+          && request.resource.data.estado == 'procesada'
+          && request.resource.data.usuario_procesa_id == request.auth.uid
+          && processedERPOrder(orderId))
+        || ((isAdmin() || isSales())
+          && resource.data.estado == 'pendiente'
+          && request.resource.data.estado == 'cancelada');
+      allow delete: if isAdmin();
+    }
+
+    match /erp_procesos/{processId} {
+      allow read: if isStaff();
+      allow create: if (isAdmin() || isSales() || isLogistics())
+        && request.resource.data.usuario_id == request.auth.uid
+        && completedERPOrder(request.resource.data.orden_id);
+      allow update, delete: if isAdmin();
+    }
+
+    match /erp_recursos/{resourceId} {
+      allow read: if isStaff();
+      allow create: if (isAdmin() || isLogistics()) && request.resource.data.creado_por == request.auth.uid;
+      allow update, delete: if isAdmin() || isLogistics();
+    }
+
+    match /erp_reportes/{reportId} {
+      allow read: if isStaff();
+      allow create: if (isAdmin() || isSales() || isLogistics())
+        && request.resource.data.tipo == 'orden_procesada'
+        && processedERPOrder(request.resource.data.orden_id);
+      allow update, delete: if isAdmin();
+    }
+
+    match /erp_estado/{stateId} {
+      allow read: if isStaff();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

@@ -101,7 +101,7 @@ async function loadScmCatalog() {
                 messagingSenderId: '181839243079',
                 appId: '1:181839243079:web:df39441f32098fc7ca4e62'
             };
-            const app = initializeApp(firebaseConfig, 'shopScmCatalog');
+            const app = initializeApp(firebaseConfig);
             const snapshot = await getDocs(collection(getFirestore(app), 'scm_productos'));
             scmProducts = snapshot.docs.map(productDoc => ({ id: productDoc.id, ...productDoc.data() }));
             localStorage.setItem('scm_catalog_cache', JSON.stringify(scmProducts));

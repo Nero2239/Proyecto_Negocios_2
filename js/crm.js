@@ -70,16 +70,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             async function getUsuarios() {
                 const snapshot = await getDocs(collection(db, 'usuarios'));
-                return snapshot.docs.map(userDoc => ({ id: userDoc.id, ...userDoc.data() }));
+                return snapshot.docs.map(userDoc => ({ id: userDoc.id, ...userDoc.data() })).filter(user => user.auth_uid === user.id);
             }
 
             async function saveUsuario(id, data) {
-                if (id) {
-                    await updateDoc(doc(db, 'usuarios', id), data);
-                    return id;
-                }
-                const userRef = await addDoc(collection(db, 'usuarios'), data);
-                return userRef.id;
+                if (!id) throw new Error('La cuenta debe registrarse primero con Firebase Authentication.');
+                await updateDoc(doc(db, 'usuarios', id), { ...data, auth_uid: id });
+                return id;
             }
 
             async function deleteUsuario(id) {
@@ -87,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             async function ensureUserClient(data) {
+                if (['admin', 'ventas', 'logistica'].includes(String(data.rol || '').toLowerCase())) return;
                 const clientQuery = query(collection(db, 'clientes'), where('correo', '==', data.email));
                 const clientSnapshot = await getDocs(clientQuery);
                 if (clientSnapshot.empty) {
@@ -105,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             async function syncUsersAsClients() {
                 const users = await getUsuarios();
                 for (const user of users) {
-                    if (user.rol !== 'admin' && user.email && user.nombre) {
+                    if (!['admin', 'ventas', 'logistica'].includes(String(user.rol || '').toLowerCase()) && user.email && user.nombre) {
                         await ensureUserClient({ email: user.email.toLowerCase(), nombre: user.nombre });
                     }
                 }
@@ -196,8 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     showCRMFeedback('Datos de prueba cargados exitosamente', 'success');
                 }
             }
-
-            // --- 5. Estado y Control de la UI ---
             let currentClients = [];
             let editingClientId = null;
             let currentClientDetailId = null;
@@ -347,9 +343,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <tr>
                             <td>${user.nombre || 'Sin nombre'}</td>
                             <td>${user.email || '—'}</td>
-                            <td><span class="role-badge ${user.rol === 'admin' ? 'role-admin' : 'role-user'}">${user.rol === 'admin' ? 'Administrador' : 'Usuario'}</span></td>
+                            <td><span class="role-badge ${user.rol === 'admin' ? 'role-admin' : user.rol === 'ventas' ? 'role-sales' : user.rol === 'logistica' ? 'role-logistics' : 'role-user'}">${({ admin: 'Administrador', ventas: 'Ventas', logistica: 'Logística', usuario: 'Usuario' })[user.rol] || 'Usuario'}</span></td>
                             <td>${user.ultimo_acceso ? new Date(user.ultimo_acceso).toLocaleDateString() : 'Sin registro'}</td>
-                            <td><button class="btn btn-sm btn-primary btn-edit-user" data-id="${user.id}" type="button" title="Editar usuario"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-danger btn-delete-user" data-id="${user.id}" type="button" title="Eliminar usuario"><i class="bi bi-trash"></i></button></td>
+                            <td><button class="btn btn-sm btn-primary btn-edit-user" data-id="${user.id}" type="button" title="Editar perfil y rol"><i class="bi bi-pencil"></i></button></td>
                         </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No hay usuarios registrados.</td></tr>';
                     renderPagination(usersPagination, usersPage, totalPages, 'users-page');
                 } catch (error) {
@@ -901,7 +897,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 askToSave(editingUserId ? '¿Deseas guardar los cambios de este usuario?' : '¿Deseas registrar este usuario?', async () => {
                     try {
                         await saveUsuario(editingUserId, data);
-                        await ensureUserClient(data);
+                        if (!['admin', 'ventas', 'logistica'].includes(data.rol)) await ensureUserClient(data);
                         showCRMFeedback(editingUserId ? 'Usuario actualizado.' : 'Usuario registrado.', 'success');
                         closeModal(userModal);
                         renderUsers();
@@ -922,7 +918,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     userNameInput.value = user.nombre || '';
                     userEmailInput.value = user.email || '';
                     userRoleInput.value = user.rol || 'usuario';
-                    if (userModalTitle) userModalTitle.textContent = 'Editar usuario y permisos';
+                    if (userModalTitle) userModalTitle.textContent = 'Editar perfil autenticado';
                     openModal(userModal);
                 }
                 if (button.classList.contains('btn-delete-user')) {
@@ -982,9 +978,6 @@ document.addEventListener('DOMContentLoaded', () => {
             observer.observe(contentContainer, { subtree: true, attributes: true, attributeFilter: ['class'] });
 
             // --- 9. Inicialización ---
-            await seedDemoData();
-            await syncUsersAsClients();
-            
             // Check initial active view
             if (document.getElementById('view-crm')?.classList.contains('active')) {
                 renderCRMClients();

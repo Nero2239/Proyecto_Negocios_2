@@ -48,11 +48,11 @@
                 <form id="loginForm" class="space-y-6">
                     <div>
                         <label for="loginEmail" class="block text-sm font-semibold text-gray-700 mb-2">Correo</label>
-                        <input id="loginEmail" type="email" class="form-input" placeholder="tucorreo@ejemplo.com">
+                        <input id="loginEmail" type="email" class="form-input" placeholder="tucorreo@ejemplo.com" required autocomplete="email">
                     </div>
                     <div>
                         <label for="loginPassword" class="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
-                        <input id="loginPassword" type="password" class="form-input" placeholder="********">
+                        <input id="loginPassword" type="password" class="form-input" placeholder="********" required autocomplete="current-password">
                     </div>
                     <div class="flex items-center gap-2">
                         <input id="rememberCheck" type="checkbox" class="h-4 w-4" />
@@ -71,15 +71,15 @@
                 <form id="registerForm" class="space-y-6">
                     <div>
                         <label for="registerName" class="block text-sm font-semibold text-gray-700 mb-2">Nombre</label>
-                        <input id="registerName" type="text" class="form-input" placeholder="Tu nombre completo">
+                        <input id="registerName" type="text" class="form-input" placeholder="Tu nombre completo" required autocomplete="name">
                     </div>
                     <div>
                         <label for="registerEmail" class="block text-sm font-semibold text-gray-700 mb-2">Correo</label>
-                        <input id="registerEmail" type="email" class="form-input" placeholder="tucorreo@ejemplo.com">
+                        <input id="registerEmail" type="email" class="form-input" placeholder="tucorreo@ejemplo.com" required autocomplete="email">
                     </div>
                     <div>
                         <label for="registerPassword" class="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
-                        <input id="registerPassword" type="password" class="form-input" placeholder="Crea una contraseña">
+                        <input id="registerPassword" type="password" class="form-input" placeholder="Crea una contraseña" required minlength="6" autocomplete="new-password">
                     </div>
                     <button type="submit" class="btn btn-primary w-full">Registrarme</button>
                 </form>
@@ -95,24 +95,7 @@
                         <label for="recoverEmail" class="block text-sm font-semibold text-gray-700 mb-2">Correo</label>
                         <input id="recoverEmail" type="email" class="form-input" placeholder="tucorreo@ejemplo.com">
                     </div>
-                    <button id="sendCodeBtn" type="button" class="btn btn-secondary w-full">Enviar código</button>
-                    <div>
-                        <label for="recoveryCode" class="block text-sm font-semibold text-gray-700 mb-2">Código de verificación</label>
-                        <input id="recoveryCode" type="text" class="form-input" placeholder="Ingresa el código simulado">
-                    </div>
-                    <button id="continueRecoveryBtn" type="button" class="btn btn-primary w-full">Continuar</button>
-                </div>
-
-                <div id="recoveryStep2" class="hidden space-y-6">
-                    <div>
-                        <label for="newPassword" class="block text-sm font-semibold text-gray-700 mb-2">Nueva contraseña</label>
-                        <input id="newPassword" type="password" class="form-input" placeholder="Nueva contraseña">
-                    </div>
-                    <div>
-                        <label for="confirmNewPassword" class="block text-sm font-semibold text-gray-700 mb-2">Confirmar nueva contraseña</label>
-                        <input id="confirmNewPassword" type="password" class="form-input" placeholder="Confirma tu nueva contraseña">
-                    </div>
-                    <button id="submitRecoveryBtn" type="button" class="btn btn-primary w-full">Guardar nueva contraseña</button>
+                    <button id="sendCodeBtn" type="button" class="btn btn-secondary w-full">Enviar enlace de recuperación</button>
                 </div>
 
                 <div class="auth-switch mt-6">
@@ -128,7 +111,6 @@
         <a href="https://twitter.com" target="_blank" title="Twitter"><i class="bi bi-twitter"></i></a>
     </div>
 
-    <script src="js/auth.js"></script>
 <div id="cartPage" class="cart-page hidden">
     <button id="closeCartButton" class="cart-close-btn" type="button" aria-label="Cerrar carrito"><i class="bi bi-x-lg"></i></button>
     <div class="cart-shell">

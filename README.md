@@ -15,6 +15,28 @@ La lógica de la aplicación, como el carrito de compras y los filtros, se manej
 - **Tailwind CSS**: Framework CSS de utilidad para un desarrollo rápido y consistente de la interfaz.
 - **JavaScript (Vanilla)**: Para toda la lógica interactiva, manipulación del DOM y gestión del estado de la aplicación.
 
+## ERP integrado
+
+La etapa ERP consume las colecciones actuales de Firestore sin copiar sus catálogos:
+
+- CRM: `clientes` y `usuarios`.
+- SCM: `scm_productos`, `scm_movimientos` y `scm_pedidos`.
+- ERP: `erp_ordenes`, `erp_procesos`, `erp_recursos`, `erp_reportes` y `erp_estado`.
+
+`js/erp.js` expone `window.erpApi` con operaciones equivalentes a `POST/GET /ordenes`, `GET /ordenes/{id}`, `PUT /ordenes/{id}/estado`, `POST /ordenes/procesar`, `GET/PUT /erp/estado` y `GET /erp/metricas`. El procesamiento de ventas usa una transacción Firestore para descontar stock SCM, registrar movimientos, completar reposiciones PUSH necesarias y guardar la operación y el reporte ERP.
+
+Este proyecto no contiene una API REST ni Firebase Functions: las operaciones transaccionales se ejecutan desde el cliente contra Firestore, protegidas por `firestore.rules`.
+
+## Activar autenticación y reglas
+
+1. En Firebase Console, habilita el proveedor **Correo electrónico/contraseña** en Authentication.
+2. Crea o conserva la cuenta administradora en Authentication, verifica su correo y copia su UID.
+3. Antes de desplegar reglas, crea el perfil `usuarios/{UID}` con `uid`, `auth_uid` (ambos iguales al UID), `email`, `nombre` y `rol: "admin"`. No se puede conceder administración desde el registro público.
+4. Desde la raíz del proyecto, despliega las reglas con `firebase deploy --only firestore:rules --project camping-3a6a4`.
+5. Los usuarios nuevos se registran desde Login, verifican su correo y reciben un perfil `usuario` ligado a su UID. Luego un administrador les puede asignar `ventas` o `logistica` desde Gestión de Usuarios.
+
+Los perfiles legacy con IDs aleatorios no reciben privilegios automáticamente. El administrador debe crear/migrar su perfil UID antes de habilitar las reglas; de lo contrario el acceso al panel queda denegado.
+
 ---
 
 ## Instalación y Ejecución

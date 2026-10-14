@@ -1,13 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
     (async function initSCM() {
-        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+        const role = (localStorage.getItem('userRole') || '').toLowerCase();
+        if (!['admin', 'logistica'].includes(role)) return;
         const { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, runTransaction } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
         const config = {
             apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc', authDomain: 'camping-3a6a4.firebaseapp.com',
             projectId: 'camping-3a6a4', storageBucket: 'camping-3a6a4.firebasestorage.app',
             messagingSenderId: '181839243079', appId: '1:181839243079:web:df39441f32098fc7ca4e62'
         };
-        const db = getFirestore(initializeApp(config, 'scmApp'));
+        const db = getFirestore(initializeApp(config));
         const $ = id => document.getElementById(id);
         const feedback = (text, type = 'success') => {
             const el = $('feedbackMessage'); if (!el) return;
@@ -607,6 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (event.target.closest('#saveScmLevel')) { const level = $('scmLevelSelect').value; const config = (await read('scm_config'))[0]; await save('scm_config', config?.id, { nivel_scm: level, actualizado: new Date().toISOString() }); feedback('Nivel SCM actualizado.'); await renderReports(); }
         });
         document.addEventListener('click', async event => { if (event.target.closest('#scmModalClose, #scmModalCancel') || event.target.matches('#scmModal > .modal-backdrop')) { $('scmModal')?.classList.add('hidden'); document.body.classList.remove('scm-modal-open'); } if (event.target.closest('#scmHistoryClose')) $('scmHistoryModal')?.classList.add('hidden'); if (event.target.closest('#scmProductDetailClose') || event.target.id === 'scmProductDetailModal') $('scmProductDetailModal')?.classList.add('hidden'); if (event.target.closest('#scmDeleteCancel')) { pendingDelete = null; $('scmDeleteModal').classList.add('hidden'); } if (event.target.closest('#scmDeleteAccept') && pendingDelete) { await remove(pendingDelete.collection, pendingDelete.id); $('scmDeleteModal').classList.add('hidden'); feedback('Registro eliminado.'); pendingDelete = null; await reload(); } });
+        window.addEventListener('erp-data-updated', () => reload().catch(error => console.error('No se pudo actualizar SCM después de ERP:', error)));
         $('newProductBtn')?.addEventListener('click', () => { document.querySelector('.nav-link[data-view="scm-productos"]')?.click(); setTimeout(() => $('openScmProductModal')?.click(), 50); });
         await seed(); await cleanAndConfigureScm(); await syncCatalogSources(); await reload();
     })().catch(error => { console.error('Error SCM:', error); });

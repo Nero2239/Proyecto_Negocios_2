@@ -840,6 +840,20 @@ body.scm-modal-open {
     color: #536174;
 }
 
+.role-sales {
+    background: #e7f2fb;
+    color: #245f91;
+}
+
+.role-logistics {
+    background: #fff2df;
+    color: #8a5a17;
+}
+
+.view-section.role-view-hidden {
+    display: none !important;
+}
+
 .empty-state {
     padding: 1.5rem;
     text-align: center;
