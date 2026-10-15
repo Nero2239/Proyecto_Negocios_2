@@ -42,6 +42,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('userName', userProfile.nombre || firebaseUser.displayName || userEmail.split('@')[0]);
     localStorage.setItem('userRole', userRole);
     localStorage.setItem('isLoggedIn', '1');
+    window.adminAuthContext = { uid: firebaseUser.uid, role: userRole };
+    window.dispatchEvent(new CustomEvent('admin-auth-ready', { detail: window.adminAuthContext }));
     const allowedViewsByRole = {
         ventas: new Set(['dashboard', 'crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'erp']),
         logistica: new Set(['dashboard', 'scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes', 'erp'])

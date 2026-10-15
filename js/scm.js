@@ -1,6 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     (async function initSCM() {
-        const role = (localStorage.getItem('userRole') || '').toLowerCase();
+        const authContext = window.adminAuthContext || await new Promise(resolve => {
+            window.addEventListener('admin-auth-ready', event => resolve(event.detail), { once: true });
+        });
+        const role = String(authContext?.role || '').toLowerCase();
         if (!['admin', 'logistica'].includes(role)) return;
         const { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, runTransaction } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
         const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');

@@ -1,8 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     (async function initERP() {
-        const role = (localStorage.getItem('userRole') || '').toLowerCase();
+        const authContext = window.adminAuthContext || await new Promise(resolve => {
+            window.addEventListener('admin-auth-ready', event => resolve(event.detail), { once: true });
+        });
+        const role = String(authContext?.role || '').toLowerCase();
         const userEmail = (localStorage.getItem('userEmail') || '').trim().toLowerCase();
-        if (!['admin', 'ventas', 'logistica'].includes(role) && !userEmail.includes('admin')) return;
+        if (!['admin', 'ventas', 'logistica'].includes(role)) return;
         const [{ initializeApp, getApps, getApp }, { getAuth }, { getFirestore, collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, runTransaction, query, where }] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
@@ -28,7 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const read = async name => (await getDocs(collection(db, name))).docs.map(snapshot => ({ id: snapshot.id, ...snapshot.data() }));
         const money = value => `$${Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
-        const state = { clients: [], products: [], users: [], orders: [], processes: [], resources: [], reports: [], maturity: null, draft: [], actorId: localStorage.getItem('userUid') || '' };
+        const state = { clients: [], products: [], users: [], orders: [], processes: [], resources: [], reports: [], maturity: null, draft: [], actorId: authContext.uid, pages: { orders: 1, processes: 1, resources: 1 } };
+        const erpPageSize = 9;
 
         function notice(message, type = 'success') {
             const element = $('erpNotice');
@@ -315,6 +319,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function customerName(id) { return state.clients.find(client => client.id === id)?.nombre || 'Cliente CRM'; }
         function productName(id) { return state.products.find(product => product.id === id)?.nombre || 'Producto SCM'; }
+        function selectedOrderLine() {
+            const product = state.products.find(item => item.id === $('erpProductSelect').value);
+            const quantity = Number($('erpProductQuantity').value);
+            if (!product || !Number.isInteger(quantity) || quantity < 1) return null;
+            const unitPrice = Number(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0);
+            if (!Number.isFinite(unitPrice) || unitPrice < 0) return null;
+            return { producto_id: product.id, nombre: product.nombre, cantidad: quantity, precio_unitario: unitPrice, subtotal: quantity * unitPrice };
+        }
+        function getOrderItems() {
+            const items = state.draft.map(item => ({ ...item }));
+            const selectedLine = selectedOrderLine();
+            if (!selectedLine) return items;
+            const existing = items.find(item => item.producto_id === selectedLine.producto_id);
+            if (existing) {
+                existing.cantidad += selectedLine.cantidad;
+                existing.subtotal = existing.cantidad * existing.precio_unitario;
+            } else items.push(selectedLine);
+            return items;
+        }
+        function dateValue(value) {
+            const time = new Date(value || 0).getTime();
+            return Number.isNaN(time) ? 0 : time;
+        }
+        function renderPageControls(containerId, pageKey, totalItems) {
+            const container = $(containerId);
+            if (!container) return;
+            const totalPages = Math.max(1, Math.ceil(totalItems / erpPageSize));
+            state.pages[pageKey] = Math.min(state.pages[pageKey], totalPages);
+            container.innerHTML = totalPages > 1 ? `<button type="button" class="page-btn" data-erp-page="${pageKey}" data-direction="prev" ${state.pages[pageKey] === 1 ? 'disabled' : ''}>Anterior</button><span class="page-indicator">Página ${state.pages[pageKey]} / ${totalPages}</span><button type="button" class="page-btn" data-erp-page="${pageKey}" data-direction="next" ${state.pages[pageKey] === totalPages ? 'disabled' : ''}>Siguiente</button>` : '';
+        }
         function renderSelects() {
             const selectedClient = $('erpClientSelect').value;
             $('erpClientSelect').innerHTML = `<option value="">Seleccionar cliente</option>${state.clients.filter(client => client.estado !== 'inactivo').map(client => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.nombre)} · ${escapeHtml(client.correo)}</option>`).join('')}`;
@@ -327,9 +361,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function renderDraft() {
             const container = $('erpDraftLines');
-            $('erpDraftTotal').textContent = money(state.draft.reduce((sum, line) => sum + line.subtotal, 0));
-            $('erpCreateOrder').disabled = !canSell || !state.draft.length || !$('erpClientSelect').value;
-            container.innerHTML = state.draft.length ? state.draft.map((line, index) => `<div class="erp-draft-line"><span>${escapeHtml(line.nombre)}<small> × ${line.cantidad}</small></span><small>${money(line.precio_unitario)} c/u</small><strong>${money(line.subtotal)}</strong><button type="button" class="erp-line-remove" data-remove-line="${index}" aria-label="Quitar producto"><i class="bi bi-trash"></i></button></div>`).join('') : '<p class="erp-empty">Agrega productos para calcular el total.</p>';
+            const orderItems = getOrderItems();
+            const selectedLine = selectedOrderLine();
+            const selectedProduct = selectedLine && state.products.find(product => product.id === selectedLine.producto_id);
+            const exceedsStock = selectedLine && selectedProduct && selectedLine.cantidad + Number(state.draft.find(item => item.producto_id === selectedLine.producto_id)?.cantidad || 0) > Number(selectedProduct.stock_actual || 0);
+            $('erpDraftTotal').textContent = money(orderItems.reduce((sum, line) => sum + line.subtotal, 0));
+            $('erpCreateOrder').disabled = !canSell || !orderItems.length || !$('erpClientSelect').value || Boolean(exceedsStock);
+            const committedLines = state.draft.map((line, index) => `<div class="erp-draft-line"><span>${escapeHtml(line.nombre)}<small> × ${line.cantidad}</small></span><small>${money(line.precio_unitario)} c/u</small><strong>${money(line.subtotal)}</strong><button type="button" class="erp-line-remove" data-remove-line="${index}" aria-label="Quitar producto"><i class="bi bi-trash"></i></button></div>`);
+            if (selectedLine) committedLines.push(`<div class="erp-draft-line erp-draft-line-pending"><span>${escapeHtml(selectedLine.nombre)}<small> × ${selectedLine.cantidad} · selección actual</small></span><small>${money(selectedLine.precio_unitario)} c/u</small><strong>${money(selectedLine.subtotal)}</strong></div>`);
+            container.innerHTML = committedLines.length ? committedLines.join('') : '<p class="erp-empty">Selecciona un producto e indica la cantidad para calcular el total.</p>';
+            if (exceedsStock) showNotice(`La cantidad supera el inventario disponible de ${selectedProduct.nombre}.`, 'error');
         }
 
         function orderRows(orders) {
@@ -344,17 +385,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function renderOrders() {
             const filter = $('erpOrderStatusFilter').value;
-            const orders = [...state.orders].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).filter(order => !filter || order.estado === filter);
-            $('erpOrdersTable').innerHTML = orders.length ? `<table class="erp-orders-table"><thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${orders.map(order => `<tr><td>${escapeHtml(order.id.slice(0, 7).toUpperCase())}</td><td>${new Date(order.fecha).toLocaleDateString('es-MX')}</td><td>${escapeHtml(customerName(order.cliente_id))}</td><td>${renderOrderLines(order)}</td><td>${money(order.total)}</td><td><span class="erp-status ${order.estado === 'procesada' ? 'processed' : ''}">${escapeHtml(order.estado)}</span></td><td>${order.estado === 'pendiente' && canProcess ? `<button type="button" class="erp-action-button" data-process-order="${escapeHtml(order.id)}">Procesar</button>` : order.estado === 'pendiente' && canSell ? `<button type="button" class="erp-action-button" data-cancel-order="${escapeHtml(order.id)}">Cancelar</button>` : '—'}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay órdenes que coincidan con el filtro.</p>';
+            const direction = $('erpOrdersSort').value === 'oldest' ? 1 : -1;
+            const orders = [...state.orders].filter(order => !filter || order.estado === filter).sort((a, b) => (dateValue(a.fecha) - dateValue(b.fecha)) * direction);
+            const totalPages = Math.max(1, Math.ceil(orders.length / erpPageSize));
+            state.pages.orders = Math.min(state.pages.orders, totalPages);
+            const visibleOrders = orders.slice((state.pages.orders - 1) * erpPageSize, state.pages.orders * erpPageSize);
+            $('erpOrdersTable').innerHTML = visibleOrders.length ? `<table class="erp-orders-table"><thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${visibleOrders.map(order => `<tr><td>${escapeHtml(order.id.slice(0, 7).toUpperCase())}</td><td>${new Date(order.fecha).toLocaleDateString('es-MX')}</td><td>${escapeHtml(customerName(order.cliente_id))}</td><td>${renderOrderLines(order)}</td><td>${money(order.total)}</td><td><span class="erp-status ${order.estado === 'procesada' ? 'processed' : ''}">${escapeHtml(order.estado)}</span></td><td>${order.estado === 'pendiente' && canProcess ? `<button type="button" class="erp-action-button" data-process-order="${escapeHtml(order.id)}">Procesar</button>` : order.estado === 'pendiente' && canSell ? `<button type="button" class="erp-action-button" data-cancel-order="${escapeHtml(order.id)}">Cancelar</button>` : '—'}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay órdenes que coincidan con el filtro.</p>';
+            renderPageControls('erpOrdersPagination', 'orders', orders.length);
             $('erpRecentOrders').innerHTML = orderRows([...state.orders].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 5));
         }
 
         function renderProcesses() {
-            $('erpProcessesTable').innerHTML = state.processes.length ? `<table class="erp-orders-table"><thead><tr><th>Fecha</th><th>Orden</th><th>Proceso</th><th>Estado</th><th>Unidades</th><th>Responsable</th></tr></thead><tbody>${[...state.processes].sort((a, b) => new Date(b.fecha_fin || b.fecha_inicio) - new Date(a.fecha_fin || a.fecha_inicio)).map(process => `<tr><td>${new Date(process.fecha_fin || process.fecha_inicio).toLocaleString('es-MX')}</td><td>${escapeHtml(String(process.orden_id || '').slice(0, 7).toUpperCase())}</td><td>${escapeHtml(process.tipo || 'operación')}</td><td><span class="erp-status processed">${escapeHtml(process.estado || 'completado')}</span></td><td>${Number(process.unidades_vendidas || 0)}</td><td>${escapeHtml(process.usuario_id || '—')}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">Los procesos aparecerán aquí al procesar o cancelar órdenes.</p>';
+            const direction = $('erpProcessesSort').value === 'oldest' ? 1 : -1;
+            const processes = [...state.processes].sort((a, b) => (dateValue(a.fecha_fin || a.fecha_inicio) - dateValue(b.fecha_fin || b.fecha_inicio)) * direction);
+            const totalPages = Math.max(1, Math.ceil(processes.length / erpPageSize));
+            state.pages.processes = Math.min(state.pages.processes, totalPages);
+            const visibleProcesses = processes.slice((state.pages.processes - 1) * erpPageSize, state.pages.processes * erpPageSize);
+            $('erpProcessesTable').innerHTML = visibleProcesses.length ? `<table class="erp-orders-table"><thead><tr><th>Fecha</th><th>Orden</th><th>Proceso</th><th>Estado</th><th>Unidades</th><th>Responsable</th></tr></thead><tbody>${visibleProcesses.map(process => `<tr><td>${new Date(process.fecha_fin || process.fecha_inicio).toLocaleString('es-MX')}</td><td>${escapeHtml(String(process.orden_id || '').slice(0, 7).toUpperCase())}</td><td>${escapeHtml(process.tipo || 'operación')}</td><td><span class="erp-status processed">${escapeHtml(process.estado || 'completado')}</span></td><td>${Number(process.unidades_vendidas || 0)}</td><td>${escapeHtml(process.usuario_id || '—')}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">Los procesos aparecerán aquí al procesar o cancelar órdenes.</p>';
+            renderPageControls('erpProcessesPagination', 'processes', processes.length);
         }
 
         function renderResources() {
-            $('erpResourcesTable').innerHTML = state.resources.length ? `<table class="erp-orders-table"><thead><tr><th>Recurso</th><th>Tipo</th><th>Responsable</th><th>Estado</th><th>Alta</th></tr></thead><tbody>${state.resources.map(resource => `<tr><td>${escapeHtml(resource.nombre)}</td><td>${escapeHtml(resource.tipo)}</td><td>${escapeHtml(state.users.find(user => user.id === resource.responsable_id)?.nombre || 'Sin asignar')}</td><td>${escapeHtml(resource.estado || 'activo')}</td><td>${resource.creado_en ? new Date(resource.creado_en).toLocaleDateString('es-MX') : '—'}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay recursos internos registrados.</p>';
+            const direction = $('erpResourcesSort').value === 'oldest' ? 1 : -1;
+            const resources = [...state.resources].sort((a, b) => (dateValue(a.creado_en) - dateValue(b.creado_en)) * direction);
+            const totalPages = Math.max(1, Math.ceil(resources.length / erpPageSize));
+            state.pages.resources = Math.min(state.pages.resources, totalPages);
+            const visibleResources = resources.slice((state.pages.resources - 1) * erpPageSize, state.pages.resources * erpPageSize);
+            $('erpResourcesTable').innerHTML = visibleResources.length ? `<table class="erp-orders-table"><thead><tr><th>Recurso</th><th>Tipo</th><th>Responsable</th><th>Estado</th><th>Alta</th></tr></thead><tbody>${visibleResources.map(resource => `<tr><td>${escapeHtml(resource.nombre)}</td><td>${escapeHtml(resource.tipo)}</td><td>${escapeHtml(state.users.find(user => user.id === resource.responsable_id)?.nombre || 'Sin asignar')}</td><td>${escapeHtml(resource.estado || 'activo')}</td><td>${resource.creado_en ? new Date(resource.creado_en).toLocaleDateString('es-MX') : '—'}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay recursos internos registrados.</p>';
+            renderPageControls('erpResourcesPagination', 'resources', resources.length);
             $('erpResourceSourceSummary').innerHTML = `<div class="erp-resource-summary-row"><strong>Clientes CRM</strong><span>${state.clients.length} registros</span></div><div class="erp-resource-summary-row"><strong>Productos SCM</strong><span>${state.products.length} registros</span></div><div class="erp-resource-summary-row"><strong>Usuarios</strong><span>${state.users.length} registros</span></div>`;
         }
 
@@ -448,19 +506,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }).observe(erpView, { attributes: true, attributeFilter: ['class'] });
         }
         $('erpClientSelect').addEventListener('change', renderDraft);
-        $('erpProductSelect').addEventListener('change', () => { $('erpProductQuantity').value = 1; });
-        $('erpOrderStatusFilter').addEventListener('change', renderOrders);
+        $('erpProductSelect').addEventListener('change', renderDraft);
+        $('erpProductQuantity').addEventListener('input', renderDraft);
+        $('erpOrderStatusFilter').addEventListener('change', () => { state.pages.orders = 1; renderOrders(); });
+        $('erpOrdersSort').addEventListener('change', () => { state.pages.orders = 1; renderOrders(); });
+        $('erpProcessesSort').addEventListener('change', () => { state.pages.processes = 1; renderProcesses(); });
+        $('erpResourcesSort').addEventListener('change', () => { state.pages.resources = 1; renderResources(); });
+        [['erpOrdersPagination', 'orders', renderOrders], ['erpProcessesPagination', 'processes', renderProcesses], ['erpResourcesPagination', 'resources', renderResources]].forEach(([containerId, pageKey, render]) => {
+            $(containerId).addEventListener('click', event => {
+                const button = event.target.closest('[data-erp-page]');
+                if (!button || button.disabled) return;
+                state.pages[pageKey] += button.dataset.direction === 'next' ? 1 : -1;
+                render();
+            });
+        });
         $('erpAddProduct').addEventListener('click', () => {
-            const product = state.products.find(item => item.id === $('erpProductSelect').value);
-            const quantity = Number($('erpProductQuantity').value);
-            if (!product) return showNotice('Selecciona un producto SCM.', 'error');
-            if (!Number.isInteger(quantity) || quantity < 1) return showNotice('La cantidad debe ser un entero mayor que cero.', 'error');
-            const existing = state.draft.find(item => item.producto_id === product.id);
-            const nextQuantity = quantity + Number(existing?.cantidad || 0);
+            const selectedLine = selectedOrderLine();
+            if (!selectedLine) return showNotice('Selecciona un producto e indica una cantidad entera mayor que cero.', 'error');
+            const product = state.products.find(item => item.id === selectedLine.producto_id);
+            const existing = state.draft.find(item => item.producto_id === selectedLine.producto_id);
+            const nextQuantity = selectedLine.cantidad + Number(existing?.cantidad || 0);
             if (nextQuantity > Number(product.stock_actual || 0)) return showNotice(`Stock insuficiente para ${product.nombre}. Disponible: ${product.stock_actual}.`, 'error');
-            const unitPrice = Number(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0);
             if (existing) { existing.cantidad = nextQuantity; existing.subtotal = existing.cantidad * existing.precio_unitario; }
-            else state.draft.push({ producto_id: product.id, nombre: product.nombre, cantidad: quantity, precio_unitario: unitPrice, subtotal: quantity * unitPrice });
+            else state.draft.push(selectedLine);
+            $('erpProductSelect').value = '';
+            $('erpProductQuantity').value = 1;
             $('erpNotice').classList.add('hidden');
             renderDraft();
         });
@@ -471,13 +541,22 @@ document.addEventListener('DOMContentLoaded', () => {
             renderDraft();
         });
         $('erpCreateOrder').addEventListener('click', async () => {
+            const button = $('erpCreateOrder');
+            const items = getOrderItems();
+            if (!items.length) return showNotice('Agrega o selecciona al menos un producto para crear la orden.', 'error');
+            button.disabled = true;
             try {
-                const orderId = await erpApi.createOrder({ clienteId: $('erpClientSelect').value, items: state.draft });
+                const orderId = await erpApi.createOrder({ clienteId: $('erpClientSelect').value, items });
                 state.draft = [];
+                $('erpProductSelect').value = '';
+                $('erpProductQuantity').value = 1;
                 await reload();
                 openTab('orders');
                 showNotice(`Orden ${orderId.slice(0, 7).toUpperCase()} creada. Lista para procesarse.`);
-            } catch (error) { showNotice(error.message || 'No se pudo crear la orden.', 'error'); }
+            } catch (error) {
+                renderDraft();
+                showNotice(error.message || 'No se pudo crear la orden.', 'error');
+            }
         });
         $('erpOrdersTable').addEventListener('click', async event => {
             const processButton = event.target.closest('[data-process-order]');

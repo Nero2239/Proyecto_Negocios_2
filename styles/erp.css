@@ -259,6 +259,8 @@
 }
 
 .erp-compact-filter { display: inline-grid; grid-template-columns: auto 130px; align-items: center; gap: 0.5rem; color: var(--admin-muted); font-size: 0.8rem; }
+.erp-list-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.65rem; }
+.erp-draft-line-pending { background: #f7faf7; }
 .erp-orders-table { width: 100%; border-collapse: collapse; min-width: 700px; }
 .erp-orders-table th,
 .erp-orders-table td { padding: 0.75rem 0.7rem; border-bottom: 1px solid var(--admin-border); text-align: left; vertical-align: middle; }
