@@ -41,7 +41,7 @@ service cloud.firestore {
       allow get: if signedIn() && (userId == request.auth.uid || isAdmin());
       allow list: if isAdmin();
 
-      allow create: if signedIn()
+      allow create: if request.auth != null
         && userId == request.auth.uid
         && !exists(profilePath(userId))
         && request.resource.data.keys().hasOnly(['uid', 'auth_uid', 'email', 'nombre', 'rol', 'creado_en', 'ultimo_acceso'])

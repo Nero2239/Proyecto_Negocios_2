@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const read = async name => (await getDocs(collection(db, name))).docs.map(snapshot => ({ id: snapshot.id, ...snapshot.data() }));
         const money = value => `$${Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
-        const state = { clients: [], products: [], users: [], orders: [], processes: [], resources: [], reports: [], maturity: null, draft: [], actorId: authContext.uid, pages: { orders: 1, processes: 1, resources: 1 } };
+        const state = { clients: [], products: [], users: [], movements: [], orders: [], processes: [], resources: [], reports: [], maturity: null, draft: [], actorId: authContext.uid, pages: { orders: 1, products: 1, clients: 1, inventory: 1, users: 1, processes: 1, resources: 1 } };
         const erpPageSize = 9;
 
         function notice(message, type = 'success') {
@@ -305,10 +305,14 @@ document.addEventListener('DOMContentLoaded', () => {
         $('erpRoleBadge').textContent = ({ admin: 'Administrador', ventas: 'Ventas', logistica: 'Logística' })[role] || 'Usuario';
         document.querySelectorAll('[data-erp-tab="maturity"]').forEach(tab => tab.classList.toggle('hidden', !canManage));
         document.querySelectorAll('[data-erp-tab="resources"]').forEach(tab => tab.classList.toggle('hidden', !canManageResources));
+        document.querySelectorAll('[data-erp-tab="users"], [data-erp-panel="users"]').forEach(element => element.classList.toggle('hidden', !canManage));
         document.querySelector('.erp-order-builder')?.classList.toggle('hidden', !canSell);
         $('erpResourceForm')?.classList.toggle('hidden', !canManageResources);
         $('erpMaturityForm')?.classList.toggle('hidden', !canManage);
         $('erpCreateOrder')?.classList.toggle('hidden', !canSell);
+        $('erpOpenScmProducts')?.classList.toggle('hidden', !canManageResources);
+        $('erpOpenCrmClients')?.classList.toggle('hidden', !canSell);
+        $('erpOpenScmInventory')?.classList.toggle('hidden', !canManageResources);
 
         function showNotice(message, type = 'success') {
             const element = $('erpNotice');
@@ -381,6 +385,91 @@ document.addEventListener('DOMContentLoaded', () => {
         function renderOrderLines(order) {
             const items = (order.productos || []).map(line => `<span>${escapeHtml(productName(line.producto_id))} × ${Number(line.cantidad || 0)}</span>`).join('<br>');
             return items || '—';
+        }
+
+        function renderProducts() {
+            const search = $('erpProductsSearch').value.trim().toLowerCase();
+            const stockFilter = $('erpProductsStockFilter').value;
+            const sort = $('erpProductsSort').value;
+            const products = state.products.filter(product => {
+                const matchesSearch = `${product.nombre || ''} ${product.categoria || ''}`.toLowerCase().includes(search);
+                const stock = Number(product.stock_actual || 0);
+                const minimum = Number(product.stock_minimo || 0);
+                const matchesStock = !stockFilter || (stockFilter === 'available' ? stock > 0 : stock <= minimum);
+                return matchesSearch && matchesStock;
+            }).sort((a, b) => {
+                if (sort === 'name') return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+                if (sort === 'stock') return Number(b.stock_actual || 0) - Number(a.stock_actual || 0);
+                return dateValue(b.created_at || b.fecha_registro) - dateValue(a.created_at || a.fecha_registro);
+            });
+            const totalPages = Math.max(1, Math.ceil(products.length / erpPageSize));
+            state.pages.products = Math.min(state.pages.products, totalPages);
+            const visibleProducts = products.slice((state.pages.products - 1) * erpPageSize, state.pages.products * erpPageSize);
+            $('erpProductsTable').innerHTML = visibleProducts.length ? `<table class="erp-orders-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Precio de venta</th><th>Costo</th><th>Existencias</th><th>Mínimo</th><th>Estrategia</th><th>Origen</th></tr></thead><tbody>${visibleProducts.map(product => `<tr><td>${escapeHtml(product.nombre || 'Sin nombre')}</td><td>${escapeHtml(product.categoria || '—')}</td><td>${money(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0)}</td><td>${money(product.costo_unitario || 0)}</td><td>${Number(product.stock_actual || 0)}</td><td>${Number(product.stock_minimo || 0)}</td><td>${escapeHtml(product.estrategia_logistica || '—')}</td><td>${escapeHtml(product.origen || 'tienda')}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay productos SCM que coincidan con el filtro.</p>';
+            renderPageControls('erpProductsPagination', 'products', products.length);
+        }
+
+        function renderClients() {
+            const search = $('erpClientsSearch').value.trim().toLowerCase();
+            const status = $('erpClientsStatus').value;
+            const sort = $('erpClientsSort').value;
+            const clients = state.clients.filter(client => {
+                const matchesSearch = `${client.nombre || ''} ${client.correo || ''} ${client.empresa || ''}`.toLowerCase().includes(search);
+                return matchesSearch && (!status || String(client.estado || '').toLowerCase() === status);
+            }).sort((a, b) => {
+                if (sort === 'name') return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+                const direction = sort === 'oldest' ? 1 : -1;
+                return (dateValue(a.fecha_registro) - dateValue(b.fecha_registro)) * direction;
+            });
+            const totalPages = Math.max(1, Math.ceil(clients.length / erpPageSize));
+            state.pages.clients = Math.min(state.pages.clients, totalPages);
+            const visibleClients = clients.slice((state.pages.clients - 1) * erpPageSize, state.pages.clients * erpPageSize);
+            $('erpClientsTable').innerHTML = visibleClients.length ? `<table class="erp-orders-table"><thead><tr><th>Cliente</th><th>Correo</th><th>Teléfono</th><th>Empresa</th><th>Estado</th><th>Etapa CRM</th></tr></thead><tbody>${visibleClients.map(client => `<tr><td>${escapeHtml(client.nombre || 'Sin nombre')}</td><td>${escapeHtml(client.correo || '—')}</td><td>${escapeHtml(client.telefono || '—')}</td><td>${escapeHtml(client.empresa || '—')}</td><td>${escapeHtml(client.estado || 'activo')}</td><td>${escapeHtml(client.etapa_crm || 'Prospecto')}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay clientes CRM que coincidan con el filtro.</p>';
+            renderPageControls('erpClientsPagination', 'clients', clients.length);
+        }
+
+        function renderInventory() {
+            const search = $('erpInventorySearch').value.trim().toLowerCase();
+            const stockFilter = $('erpInventoryStatus').value;
+            const sort = $('erpInventorySort').value;
+            const products = state.products.filter(product => {
+                const stock = Number(product.stock_actual || 0);
+                const minimum = Number(product.stock_minimo || 0);
+                const matchesSearch = `${product.nombre || ''} ${product.categoria || ''}`.toLowerCase().includes(search);
+                const matchesStock = !stockFilter || (stockFilter === 'empty' ? stock === 0 : stockFilter === 'critical' ? stock > 0 && stock <= minimum : stock > 0);
+                return matchesSearch && matchesStock;
+            }).sort((a, b) => {
+                if (sort === 'name') return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+                if (sort === 'stock') return Number(a.stock_actual || 0) - Number(b.stock_actual || 0);
+                const direction = sort === 'oldest' ? 1 : -1;
+                return (dateValue(a.created_at || a.fecha_registro) - dateValue(b.created_at || b.fecha_registro)) * direction;
+            });
+            const latestMovements = new Map();
+            [...state.movements].sort((a, b) => dateValue(b.fecha) - dateValue(a.fecha)).forEach(movement => {
+                if (!latestMovements.has(movement.producto_id)) latestMovements.set(movement.producto_id, movement);
+            });
+            const totalPages = Math.max(1, Math.ceil(products.length / erpPageSize));
+            state.pages.inventory = Math.min(state.pages.inventory, totalPages);
+            const visibleProducts = products.slice((state.pages.inventory - 1) * erpPageSize, state.pages.inventory * erpPageSize);
+            $('erpInventoryTable').innerHTML = visibleProducts.length ? `<table class="erp-orders-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Existencias</th><th>Mínimo</th><th>Estado</th><th>Último movimiento</th></tr></thead><tbody>${visibleProducts.map(product => {
+                const stock = Number(product.stock_actual || 0);
+                const minimum = Number(product.stock_minimo || 0);
+                const status = stock === 0 ? 'Agotado' : stock <= minimum ? 'Crítico' : 'Disponible';
+                const movement = latestMovements.get(product.id);
+                return `<tr><td>${escapeHtml(product.nombre || 'Sin nombre')}</td><td>${escapeHtml(product.categoria || '—')}</td><td>${stock}</td><td>${minimum}</td><td>${status}</td><td>${movement ? `${escapeHtml(movement.tipo || 'movimiento')} · ${new Date(movement.fecha).toLocaleDateString('es-MX')}` : 'Sin movimientos'}</td></tr>`;
+            }).join('')}</tbody></table>` : '<p class="erp-empty">No hay productos de inventario que coincidan con el filtro.</p>';
+            renderPageControls('erpInventoryPagination', 'inventory', products.length);
+        }
+
+        function renderUsers() {
+            const totalPages = Math.max(1, Math.ceil(state.users.length / erpPageSize));
+            state.pages.users = Math.min(state.pages.users, totalPages);
+            const visibleUsers = state.users.slice((state.pages.users - 1) * erpPageSize, state.pages.users * erpPageSize);
+            $('erpUsersTable').innerHTML = visibleUsers.length ? `<table class="erp-orders-table"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Último acceso</th><th>Acción</th></tr></thead><tbody>${visibleUsers.map(user => {
+                const isCurrentUser = user.id === authContext.uid;
+                return `<tr><td>${escapeHtml(user.nombre || 'Sin nombre')}${isCurrentUser ? ' · Tú' : ''}</td><td>${escapeHtml(user.email || '—')}</td><td><select data-user-role="${escapeHtml(user.id)}" aria-label="Rol de ${escapeHtml(user.nombre || user.email)}" ${isCurrentUser ? 'disabled' : ''}><option value="usuario" ${user.rol === 'usuario' ? 'selected' : ''}>Usuario</option><option value="ventas" ${user.rol === 'ventas' ? 'selected' : ''}>Ventas</option><option value="logistica" ${user.rol === 'logistica' ? 'selected' : ''}>Logística</option><option value="admin" ${user.rol === 'admin' ? 'selected' : ''}>Administrador</option></select></td><td>${user.ultimo_acceso ? new Date(user.ultimo_acceso).toLocaleDateString('es-MX') : 'Sin registro'}</td><td><button class="erp-action-button" type="button" data-save-user-role="${escapeHtml(user.id)}" ${isCurrentUser ? 'disabled' : ''}>${isCurrentUser ? 'Cuenta actual' : 'Guardar rol'}</button></td></tr>`;
+            }).join('')}</tbody></table>` : '<p class="erp-empty">No hay perfiles de usuario vinculados.</p>';
+            renderPageControls('erpUsersPagination', 'users', state.users.length);
         }
 
         function renderOrders() {
@@ -467,12 +556,13 @@ document.addEventListener('DOMContentLoaded', () => {
         async function reload() {
             const authUid = localStorage.getItem('userUid') || '';
             const usersPromise = canManage ? read('usuarios').then(users => users.filter(user => user.auth_uid === user.id)) : authUid ? getDoc(doc(db, 'usuarios', authUid)).then(snapshot => snapshot.exists() ? [{ id: snapshot.id, ...snapshot.data() }] : []) : Promise.resolve([]);
-            const [clients, products, users, orders, processes, resources, reports, maturity] = await Promise.all([
-                read('clientes'), read('scm_productos'), usersPromise, erpApi.listOrders(), read('erp_procesos'), erpApi.listResources(), read('erp_reportes'), erpApi.getMaturity()
+            const [clients, products, users, movements, orders, processes, resources, reports, maturity] = await Promise.all([
+                read('clientes'), read('scm_productos'), usersPromise, read('scm_movimientos'), erpApi.listOrders(), read('erp_procesos'), erpApi.listResources(), read('erp_reportes'), erpApi.getMaturity()
             ]);
             state.clients = clients;
             state.products = products;
             state.users = users;
+            state.movements = movements;
             state.orders = orders;
             state.processes = processes;
             state.resources = resources;
@@ -483,6 +573,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderSelects();
             renderDraft();
             renderDashboard(await erpApi.getMetrics());
+            renderProducts();
+            renderClients();
+            renderInventory();
+            renderUsers();
             renderProcesses();
             renderResources();
             renderMaturity();
@@ -492,6 +586,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('[data-erp-tab]').forEach(tab => tab.classList.toggle('active', tab.dataset.erpTab === tabName));
             document.querySelectorAll('[data-erp-panel]').forEach(panel => panel.classList.toggle('active', panel.dataset.erpPanel === tabName));
             if (tabName === 'orders') renderOrders();
+            if (tabName === 'products') renderProducts();
+            if (tabName === 'clients') renderClients();
+            if (tabName === 'inventory') renderInventory();
+            if (tabName === 'users') renderUsers();
             if (tabName === 'processes') renderProcesses();
             if (tabName === 'resources') renderResources();
             if (tabName === 'maturity') renderMaturity();
@@ -506,13 +604,42 @@ document.addEventListener('DOMContentLoaded', () => {
             }).observe(erpView, { attributes: true, attributeFilter: ['class'] });
         }
         $('erpClientSelect').addEventListener('change', renderDraft);
+        $('erpProductsSearch').addEventListener('input', () => { state.pages.products = 1; renderProducts(); });
+        $('erpProductsStockFilter').addEventListener('change', () => { state.pages.products = 1; renderProducts(); });
+        $('erpProductsSort').addEventListener('change', () => { state.pages.products = 1; renderProducts(); });
+        $('erpOpenScmProducts').addEventListener('click', () => document.querySelector('.nav-link[data-view="scm-productos"]')?.click());
+        $('erpClientsSearch').addEventListener('input', () => { state.pages.clients = 1; renderClients(); });
+        $('erpClientsStatus').addEventListener('change', () => { state.pages.clients = 1; renderClients(); });
+        $('erpClientsSort').addEventListener('change', () => { state.pages.clients = 1; renderClients(); });
+        $('erpInventorySearch').addEventListener('input', () => { state.pages.inventory = 1; renderInventory(); });
+        $('erpInventoryStatus').addEventListener('change', () => { state.pages.inventory = 1; renderInventory(); });
+        $('erpInventorySort').addEventListener('change', () => { state.pages.inventory = 1; renderInventory(); });
+        $('erpOpenCrmClients').addEventListener('click', () => document.querySelector('.nav-link[data-view="crm"]')?.click());
+        $('erpOpenScmInventory').addEventListener('click', () => document.querySelector('.nav-link[data-view="scm-inventario"]')?.click());
+        $('erpUsersTable').addEventListener('click', async event => {
+            const button = event.target.closest('[data-save-user-role]');
+            if (!button || button.disabled) return;
+            const userId = button.dataset.saveUserRole;
+            const roleSelect = [...$('erpUsersTable').querySelectorAll('[data-user-role]')].find(select => select.dataset.userRole === userId);
+            if (!roleSelect) return;
+            button.disabled = true;
+            try {
+                await erpApi.updateUserRole(userId, roleSelect.value, authContext.uid);
+                state.users = state.users.map(user => user.id === userId ? { ...user, rol: roleSelect.value } : user);
+                renderUsers();
+                showNotice('Rol actualizado correctamente.');
+            } catch (error) {
+                button.disabled = false;
+                showNotice(error.message || 'No se pudo actualizar el rol.', 'error');
+            }
+        });
         $('erpProductSelect').addEventListener('change', renderDraft);
         $('erpProductQuantity').addEventListener('input', renderDraft);
         $('erpOrderStatusFilter').addEventListener('change', () => { state.pages.orders = 1; renderOrders(); });
         $('erpOrdersSort').addEventListener('change', () => { state.pages.orders = 1; renderOrders(); });
         $('erpProcessesSort').addEventListener('change', () => { state.pages.processes = 1; renderProcesses(); });
         $('erpResourcesSort').addEventListener('change', () => { state.pages.resources = 1; renderResources(); });
-        [['erpOrdersPagination', 'orders', renderOrders], ['erpProcessesPagination', 'processes', renderProcesses], ['erpResourcesPagination', 'resources', renderResources]].forEach(([containerId, pageKey, render]) => {
+        [['erpOrdersPagination', 'orders', renderOrders], ['erpProductsPagination', 'products', renderProducts], ['erpClientsPagination', 'clients', renderClients], ['erpInventoryPagination', 'inventory', renderInventory], ['erpUsersPagination', 'users', renderUsers], ['erpProcessesPagination', 'processes', renderProcesses], ['erpResourcesPagination', 'resources', renderResources]].forEach(([containerId, pageKey, render]) => {
             $(containerId).addEventListener('click', event => {
                 const button = event.target.closest('[data-erp-page]');
                 if (!button || button.disabled) return;

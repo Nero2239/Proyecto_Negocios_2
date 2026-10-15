@@ -457,6 +457,10 @@
                 <nav class="erp-tabs" role="tablist" aria-label="Secciones ERP">
                     <button type="button" class="erp-tab active" data-erp-tab="dashboard"><i class="bi bi-grid-1x2"></i> Resumen</button>
                     <button type="button" class="erp-tab" data-erp-tab="orders"><i class="bi bi-receipt"></i> Órdenes</button>
+                    <button type="button" class="erp-tab" data-erp-tab="products"><i class="bi bi-backpack3"></i> Productos SCM</button>
+                    <button type="button" class="erp-tab" data-erp-tab="clients"><i class="bi bi-people"></i> Clientes CRM</button>
+                    <button type="button" class="erp-tab" data-erp-tab="inventory"><i class="bi bi-boxes"></i> Inventario SCM</button>
+                    <button type="button" class="erp-tab" data-erp-tab="users"><i class="bi bi-person-gear"></i> Usuarios</button>
                     <button type="button" class="erp-tab" data-erp-tab="processes"><i class="bi bi-arrow-repeat"></i> Procesos</button>
                     <button type="button" class="erp-tab" data-erp-tab="resources"><i class="bi bi-boxes"></i> Recursos</button>
                     <button type="button" class="erp-tab" data-erp-tab="maturity"><i class="bi bi-speedometer2"></i> Nivel ERP</button>
@@ -486,6 +490,30 @@
                         <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Flujo de operación</h3><p>El inventario se descuenta al procesar.</p></div></div><ol class="erp-flow"><li><span>1</span><div><strong>Crear orden</strong><small>Cliente CRM y productos SCM</small></div></li><li><span>2</span><div><strong>Confirmar operación</strong><small>Validación de disponibilidad</small></div></li><li><span>3</span><div><strong>Actualizar módulos</strong><small>Stock, movimiento e historial ERP</small></div></li></ol><div id="erpOrderProcessStatus" class="erp-process-status"><i class="bi bi-info-circle"></i><span>Selecciona una orden pendiente para procesarla.</span></div></article>
                     </div>
                     <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Órdenes empresariales</h3><p>Historial integrado con CRM y SCM</p></div><div class="erp-list-controls"><label class="erp-compact-filter">Estado<select id="erpOrderStatusFilter"><option value="">Todos</option><option value="pendiente">Pendientes</option><option value="procesada">Procesadas</option></select></label><label class="erp-compact-filter">Ordenar<select id="erpOrdersSort"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option></select></label></div></div><div id="erpOrdersTable" class="table-wrap"></div><div id="erpOrdersPagination" class="pagination-row"></div></article>
+                </section>
+
+                <section class="erp-panel" data-erp-panel="products">
+                    <section class="filters-card erp-product-filters">
+                        <div class="filter-group"><label for="erpProductsSearch">Buscar producto</label><input id="erpProductsSearch" type="search" placeholder="Nombre o categoría"></div>
+                        <div class="filter-group"><label for="erpProductsStockFilter">Inventario</label><select id="erpProductsStockFilter"><option value="">Todos</option><option value="available">Con existencias</option><option value="critical">Stock crítico</option></select></div>
+                        <label class="erp-compact-filter">Ordenar<select id="erpProductsSort"><option value="recent">Más recientes</option><option value="name">Nombre</option><option value="stock">Existencias</option></select></label>
+                        <button id="erpOpenScmProducts" class="btn btn-outline" type="button"><i class="bi bi-box-arrow-up-right"></i> Administrar en SCM</button>
+                    </section>
+                    <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Catálogo conectado a SCM</h3><p>Productos, precios y existencias del inventario SCM</p></div></div><div id="erpProductsTable" class="table-wrap"></div><div id="erpProductsPagination" class="pagination-row"></div></article>
+                </section>
+
+                <section class="erp-panel" data-erp-panel="clients">
+                    <section class="filters-card"><div class="filter-group"><label for="erpClientsSearch">Buscar cliente</label><input id="erpClientsSearch" type="search" placeholder="Nombre, correo o empresa"></div><div class="filter-group"><label for="erpClientsStatus">Estado</label><select id="erpClientsStatus"><option value="">Todos</option><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></div><label class="erp-compact-filter">Ordenar<select id="erpClientsSort"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option><option value="name">Nombre</option></select></label></section>
+                    <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Clientes CRM</h3><p>Registros compartidos con el módulo de clientes y órdenes ERP</p></div><button id="erpOpenCrmClients" class="btn btn-outline" type="button"><i class="bi bi-box-arrow-up-right"></i> Administrar en CRM</button></div><div id="erpClientsTable" class="table-wrap"></div><div id="erpClientsPagination" class="pagination-row"></div></article>
+                </section>
+
+                <section class="erp-panel" data-erp-panel="inventory">
+                    <section class="filters-card"><div class="filter-group"><label for="erpInventorySearch">Buscar producto</label><input id="erpInventorySearch" type="search" placeholder="Nombre o categoría"></div><div class="filter-group"><label for="erpInventoryStatus">Estado del stock</label><select id="erpInventoryStatus"><option value="">Todos</option><option value="available">Con existencias</option><option value="critical">Stock crítico</option><option value="empty">Agotado</option></select></div><label class="erp-compact-filter">Ordenar<select id="erpInventorySort"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option><option value="name">Nombre</option><option value="stock">Existencias</option></select></label></section>
+                    <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Inventario SCM</h3><p>Existencias actuales y último movimiento registrado</p></div><button id="erpOpenScmInventory" class="btn btn-outline" type="button"><i class="bi bi-box-arrow-up-right"></i> Administrar en SCM</button></div><div id="erpInventoryTable" class="table-wrap"></div><div id="erpInventoryPagination" class="pagination-row"></div></article>
+                </section>
+
+                <section class="erp-panel" data-erp-panel="users">
+                    <article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Usuarios y roles</h3><p>Las cuentas se registran desde Login; aquí se administran sus permisos.</p></div></div><div id="erpUsersTable" class="table-wrap"></div><div id="erpUsersPagination" class="pagination-row"></div></article>
                 </section>
 
                 <section class="erp-panel" data-erp-panel="processes"><article class="panel-card erp-panel-card"><div class="panel-head"><div><h3>Procesamiento de órdenes</h3><p>Historial automático de inventario y operación.</p></div><label class="erp-compact-filter">Ordenar<select id="erpProcessesSort"><option value="recent">Más recientes</option><option value="oldest">Más antiguos</option></select></label></div><div id="erpProcessesTable" class="table-wrap"></div><div id="erpProcessesPagination" class="pagination-row"></div></article></section>

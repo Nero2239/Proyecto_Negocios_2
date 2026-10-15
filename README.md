@@ -35,9 +35,11 @@ Este proyecto no contiene una API REST ni Firebase Functions: las operaciones tr
 2. Crea o conserva la cuenta administradora en Authentication, verifica su correo y copia su UID.
 3. Antes de desplegar reglas, crea el perfil `usuarios/{UID}` con `uid`, `auth_uid` (ambos iguales al UID), `email`, `nombre` y `rol: "admin"`. No se puede conceder administración desde el registro público.
 4. Desde la raíz del proyecto, despliega las reglas con `firebase deploy --only firestore:rules --project camping-3a6a4`.
-5. Los usuarios nuevos se registran desde Login, verifican su correo y reciben un perfil `usuario` ligado a su UID. Luego un administrador les puede asignar `ventas` o `logistica` desde Gestión de Usuarios.
+5. Los usuarios nuevos se registran desde el botón de Login. El formulario crea la cuenta y un perfil `usuario` ligado al UID; deben verificar el correo antes de iniciar sesión. Luego un administrador puede asignar `ventas` o `logistica` desde Gestión de Usuarios. El perfil previo a la verificación requiere las reglas actualizadas de `firestore.rules`; con reglas antiguas, se vinculará al primer inicio verificado.
 
 Los perfiles legacy con IDs aleatorios no reciben privilegios automáticamente. El administrador debe crear/migrar su perfil UID antes de habilitar las reglas; de lo contrario el acceso al panel queda denegado.
+
+El perfil de cliente no muestra historial de compras mientras no existan pedidos reales asociados a cada usuario.
 
 ---
 

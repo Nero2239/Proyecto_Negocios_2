@@ -10,12 +10,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let firebaseUser;
     let userProfile;
     try {
-        const [{ initializeApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, getDoc }] = await Promise.all([
+        const [{ initializeApp, getApps, getApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, getDoc }] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
         ]);
-        const app = initializeApp(firebaseConfig);
+        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         firebaseUser = await new Promise(resolve => {

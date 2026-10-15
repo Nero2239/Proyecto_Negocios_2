@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
                 import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js')
             ]).then(([authSdk, firestoreSdk, appSdk]) => {
-                const app = appSdk.initializeApp(firebaseConfig);
+                const app = appSdk.getApps().length ? appSdk.getApp() : appSdk.initializeApp(firebaseConfig);
                 return { auth: authSdk.getAuth(app), authSdk, db: firestoreSdk.getFirestore(app), firestoreSdk };
             });
         }
@@ -186,11 +186,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = document.getElementById('registerName').value.trim();
             const password = document.getElementById('registerPassword').value;
             try {
-                const { auth, authSdk } = await getFirebaseContext();
+                const { auth, authSdk, db, firestoreSdk } = await getFirebaseContext();
                 await authSdk.setPersistence(auth, authSdk.browserLocalPersistence);
                 const credential = await authSdk.createUserWithEmailAndPassword(auth, email, password);
                 if (name) await authSdk.updateProfile(credential.user, { displayName: name });
                 await authSdk.sendEmailVerification(credential.user);
+                let profileCreated = false;
+                try {
+                    await firestoreSdk.setDoc(firestoreSdk.doc(db, 'usuarios', credential.user.uid), {
+                        uid: credential.user.uid,
+                        auth_uid: credential.user.uid,
+                        email: credential.user.email.toLowerCase(),
+                        nombre: name || credential.user.displayName || email.split('@')[0],
+                        rol: 'usuario',
+                        creado_en: new Date().toISOString()
+                    });
+                    profileCreated = true;
+                } catch (profileError) {
+                    console.warn('El perfil se completará al primer inicio verificado:', profileError);
+                }
                 await authSdk.signOut(auth);
                 localStorage.removeItem('userEmail');
                 localStorage.removeItem('userName');
@@ -199,7 +213,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.removeItem('isLoggedIn');
                 registerForm.reset();
                 showLoginForm();
-                showMessage('Cuenta creada. Confirma tu correo con el enlace que te enviamos y después inicia sesión.', 'success', true);
+                showMessage(profileCreated
+                    ? 'Cuenta creada con rol Usuario. Confirma el correo y el administrador podrá asignarte un rol.'
+                    : 'Cuenta creada. Confirma el correo e inicia sesión; tu perfil se vinculará automáticamente para que el administrador pueda asignarte un rol.', 'success', true);
             } catch (error) {
                 console.error('No se pudo registrar la cuenta:', error);
                 const messages = {

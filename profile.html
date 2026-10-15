@@ -88,28 +88,6 @@
                 <section class="profile-section-card">
                     <div class="profile-section-header">
                         <div>
-                            <p class="text-sm uppercase tracking-widest text-[#606C5A] font-bold">Mis compras</p>
-                            <h2 class="text-2xl font-serif text-[#2C302E] mt-2">Historial reciente</h2>
-                        </div>
-                        <span id="purchaseCount" class="profile-pill">2 pedidos</span>
-                    </div>
-                    <div id="purchaseHistory" class="purchase-history" aria-live="polite"></div>
-                </section>
-
-                <section class="profile-section-card purchase-history-note">
-                    <div class="profile-section-header">
-                        <div>
-                            <p class="text-sm uppercase tracking-widest text-[#606C5A] font-bold">Tus aventuras</p>
-                            <h2 class="text-2xl font-serif text-[#2C302E] mt-2">Compras listas para consultar</h2>
-                        </div>
-                        <i class="bi bi-compass text-3xl text-[#606C5A]" aria-hidden="true"></i>
-                    </div>
-                    <p class="text-gray-600">Revisa el resumen de cada pedido y vuelve a consultar sus productos cuando lo necesites.</p>
-                </section>
-
-                <section class="profile-section-card">
-                    <div class="profile-section-header">
-                        <div>
                             <p class="text-sm uppercase tracking-widest text-[#606C5A] font-bold">Comunidad</p>
                             <h2 class="text-2xl font-serif text-[#2C302E] mt-2">Deja un comentario</h2>
                         </div>
@@ -132,7 +110,7 @@
                             <p class="text-gray-600 mt-2">Tu espacio para vender productos y participar en subastas simuladas desde tu perfil.</p>
                         </div>
                         <div class="c2c-dashboard-actions">
-                            <a id="adminPanelLink" href="admin.html" class="btn btn-primary hidden">Ir al panel admin</a>
+                            <a id="adminPanelLink" href="admin.html" class="btn btn-primary hidden">Ir al panel empresarial</a>
                         </div>
                     </div>
 
@@ -224,32 +202,64 @@
         <a href="https://twitter.com" target="_blank" title="Twitter"><i class="bi bi-twitter"></i></a>
     </div>
 
-    <div id="purchaseDetailModal" class="purchase-detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="purchaseDetailTitle">
-        <div class="purchase-detail-backdrop" data-close-purchase></div>
-        <section class="purchase-ticket-panel">
-            <button id="closePurchaseDetail" class="purchase-detail-close" type="button" aria-label="Cerrar detalle"><i class="bi bi-x-lg"></i></button>
-            <div id="purchaseDetailContent"></div>
-        </section>
-    </div>
-
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const adminPanelLink = document.getElementById('adminPanelLink');
             const profileRole = document.getElementById('profileRole');
             const sellerDashboard = document.getElementById('sellerDashboard');
-            const email = (localStorage.getItem('userEmail') || '').toLowerCase();
-            const userRole = localStorage.getItem('userRole');
-            const isLoggedIn = localStorage.getItem('isLoggedIn') === '1' || Boolean(localStorage.getItem('userEmail'));
+            if (adminPanelLink) adminPanelLink.classList.add('hidden');
+            try {
+                const [{ initializeApp, getApps, getApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, getDoc }] = await Promise.all([
+                    import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
+                    import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
+                    import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
+                ]);
+                const config = {
+                    apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
+                    authDomain: 'camping-3a6a4.firebaseapp.com',
+                    projectId: 'camping-3a6a4',
+                    storageBucket: 'camping-3a6a4.firebasestorage.app',
+                    messagingSenderId: '181839243079',
+                    appId: '1:181839243079:web:df39441f32098fc7ca4e62'
+                };
+                const app = getApps().length ? getApp() : initializeApp(config);
+                const auth = getAuth(app);
+                const db = getFirestore(app);
+                const user = await new Promise(resolve => {
+                    const unsubscribe = onAuthStateChanged(auth, currentUser => { unsubscribe(); resolve(currentUser); }, () => resolve(null));
+                });
+                if (!user?.emailVerified) throw new Error('Inicia sesión con un correo verificado para consultar tu perfil.');
+                const profileSnapshot = await getDoc(doc(db, 'usuarios', user.uid));
+                if (!profileSnapshot.exists()) throw new Error('No existe un perfil vinculado a esta cuenta.');
+                const profile = profileSnapshot.data();
+                if (profile.auth_uid !== user.uid || profile.email !== user.email.toLowerCase()) throw new Error('El perfil no coincide con la cuenta autenticada.');
 
-            if ((userRole === 'admin' || email.includes('admin')) && adminPanelLink) {
-                adminPanelLink.classList.remove('hidden');
-                if (profileRole) profileRole.textContent = 'Administrador';
-            } else if (profileRole) {
-                profileRole.textContent = isLoggedIn ? 'Usuario' : 'Campista explorador';
-            }
+                const role = String(profile.rol || 'usuario').toLowerCase();
+                const roleLabels = { admin: 'Administrador', ventas: 'Ventas', logistica: 'Logística', usuario: 'Usuario' };
+                localStorage.setItem('userEmail', user.email.toLowerCase());
+                localStorage.setItem('userName', profile.nombre || user.displayName || user.email.split('@')[0]);
+                localStorage.setItem('userUid', user.uid);
+                localStorage.setItem('userRole', role);
+                localStorage.setItem('isLoggedIn', '1');
+                document.getElementById('profileEmail').textContent = user.email;
+                if (profileRole) profileRole.textContent = roleLabels[role] || 'Usuario';
+                sellerDashboard?.classList.remove('hidden');
 
-            if (isLoggedIn && sellerDashboard) {
-                sellerDashboard.classList.remove('hidden');
+                if (['admin', 'ventas', 'logistica'].includes(role) && adminPanelLink) {
+                    adminPanelLink.classList.remove('hidden');
+                    adminPanelLink.addEventListener('click', async event => {
+                        event.preventDefault();
+                        if (auth.currentUser?.uid !== user.uid || !auth.currentUser.emailVerified) {
+                            adminPanelLink.classList.add('hidden');
+                            return;
+                        }
+                        window.location.replace('admin.html');
+                    });
+                }
+            } catch (error) {
+                console.warn('No se pudo cargar el perfil:', error.message);
+                if (profileRole) profileRole.textContent = 'Inicia sesión para consultar tu cuenta';
+                if (sellerDashboard) sellerDashboard.classList.add('hidden');
             }
         });
     </script>
@@ -281,6 +291,5 @@
 <script src="js/shop.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/c2c.js"></script>
-    <script src="js/profile.js"></script>
 </body>
 </html>

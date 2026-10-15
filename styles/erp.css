@@ -266,6 +266,8 @@
 .erp-orders-table td { padding: 0.75rem 0.7rem; border-bottom: 1px solid var(--admin-border); text-align: left; vertical-align: middle; }
 .erp-orders-table th { color: var(--admin-muted); font-size: 0.72rem; text-transform: uppercase; }
 .erp-orders-table td { color: var(--admin-text); font-size: 0.84rem; }
+.erp-orders-table select { min-width: 125px; padding: 0.45rem 0.55rem; border: 1px solid var(--admin-border); border-radius: 7px; background: white; color: var(--admin-text); }
+.erp-orders-table select:disabled { background: #f1f3f1; color: var(--admin-muted); }
 .erp-status { display: inline-flex; padding: 0.3rem 0.55rem; border-radius: 999px; background: #fff4dd; color: #8a641e; font-size: 0.72rem; font-weight: 800; }
 .erp-status.processed { background: #e8f4eb; color: #2f6f4f; }
 .erp-action-button { padding: 0.45rem 0.6rem; border: 1px solid var(--admin-border); border-radius: 8px; background: white; color: var(--admin-accent); font-weight: 700; cursor: pointer; }
