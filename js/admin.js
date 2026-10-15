@@ -64,7 +64,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const feedbackMessage = document.getElementById('feedbackMessage');
     const adminNameLabel = document.getElementById('adminNameLabel');
     const roleLabels = { admin: 'Administrador', ventas: 'Ventas', logistica: 'Logística' };
-    if (adminNameLabel) adminNameLabel.textContent = `${localStorage.getItem('userName') || roleLabels[userRole] || 'Usuario'} · ${roleLabels[userRole] || 'Usuario'}`;
+    const currentUserName = String(userProfile.nombre || firebaseUser.displayName || userEmail.split('@')[0] || 'Usuario');
+    localStorage.setItem('userName', currentUserName);
+    localStorage.setItem('userRole', userRole);
+    if (adminNameLabel) adminNameLabel.textContent = `${currentUserName} · ${roleLabels[userRole] || 'Usuario'}`;
     navLinks.forEach(link => link.classList.toggle('hidden', Boolean(roleViews && !roleViews.has(link.dataset.view))));
     viewSections.forEach(section => section.classList.toggle('role-view-hidden', Boolean(roleViews && !roleViews.has(section.id.replace('view-', '')))));
     document.querySelectorAll('[data-role-group]').forEach(element => {

@@ -3,8 +3,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const role = (localStorage.getItem('userRole') || '').toLowerCase();
         const userEmail = (localStorage.getItem('userEmail') || '').trim().toLowerCase();
         if (!['admin', 'ventas', 'logistica'].includes(role) && !userEmail.includes('admin')) return;
-        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
-        const { getFirestore, collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, runTransaction, query, where } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+        const [{ initializeApp, getApps, getApp }, { getAuth }, { getFirestore, collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, runTransaction, query, where }] = await Promise.all([
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
+        ]);
         const config = {
             apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
             authDomain: 'camping-3a6a4.firebaseapp.com',
@@ -13,7 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
             messagingSenderId: '181839243079',
             appId: '1:181839243079:web:df39441f32098fc7ca4e62'
         };
-        const db = getFirestore(initializeApp(config));
+        const app = getApps().length ? getApp() : initializeApp(config);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
         const $ = id => document.getElementById(id);
         const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'Usuario';
         const canManage = role === 'admin';
@@ -23,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const read = async name => (await getDocs(collection(db, name))).docs.map(snapshot => ({ id: snapshot.id, ...snapshot.data() }));
         const money = value => `$${Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
-        const state = { clients: [], products: [], users: [], orders: [], processes: [], resources: [], reports: [], maturity: null, draft: [], actorId: userEmail };
+        const state = { clients: [], products: [], users: [], orders: [], processes: [], resources: [], reports: [], maturity: null, draft: [], actorId: localStorage.getItem('userUid') || '' };
 
         function notice(message, type = 'success') {
             const element = $('erpNotice');
@@ -46,37 +51,65 @@ document.addEventListener('DOMContentLoaded', () => {
                 const snapshot = await getDoc(doc(db, 'erp_ordenes', id));
                 return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
             },
-            async createOrder({ clienteId, items, usuarioId }) {
+            async createOrder({ clienteId, items }) {
                 if (!canSell) throw new Error('Tu rol no tiene permiso para crear órdenes.');
                 if (!clienteId) throw new Error('Selecciona un cliente CRM.');
                 if (!Array.isArray(items) || !items.length) throw new Error('Agrega al menos un producto.');
-                const clientSnapshot = await getDoc(doc(db, 'clientes', clienteId));
-                if (!clientSnapshot.exists()) throw new Error('El cliente ya no existe en CRM.');
-                const normalizedItems = [];
-                for (const item of items) {
-                    const quantity = Number(item.cantidad);
-                    if (!Number.isInteger(quantity) || quantity < 1) throw new Error('Las cantidades deben ser enteros mayores que cero.');
-                    const productSnapshot = await getDoc(doc(db, 'scm_productos', item.producto_id));
-                    if (!productSnapshot.exists()) throw new Error('Uno de los productos ya no está disponible.');
-                    const product = productSnapshot.data();
-                    const stock = Number(product.stock_actual || 0);
-                    if (stock < quantity) throw new Error(`Stock insuficiente para ${product.nombre}. Disponible: ${stock}.`);
-                    const unitPrice = Number(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0);
-                    normalizedItems.push({ producto_id: productSnapshot.id, cantidad: quantity, precio_unitario: unitPrice, subtotal: quantity * unitPrice });
-                }
-                const total = normalizedItems.reduce((sum, item) => sum + item.subtotal, 0);
-                const created = await addDoc(collection(db, 'erp_ordenes'), {
-                    cliente_id: clienteId,
-                    fecha: new Date().toISOString(),
-                    estado: 'pendiente',
-                    total,
-                    usuario_id: usuarioId || userEmail,
-                    productos: normalizedItems
+                const authenticatedUid = auth.currentUser?.uid;
+                if (!authenticatedUid) throw new Error('La sesión de Firebase expiró. Inicia sesión nuevamente.');
+                const orderRef = doc(collection(db, 'erp_ordenes'));
+                const timestamp = new Date().toISOString();
+
+                await runTransaction(db, async transaction => {
+                    const clientSnapshot = await transaction.get(doc(db, 'clientes', clienteId));
+                    if (!clientSnapshot.exists()) throw new Error('El cliente ya no existe en CRM.');
+
+                    const productSnapshots = new Map();
+                    const quantitiesByProduct = new Map();
+                    for (const item of items) {
+                        const productId = String(item.producto_id || '');
+                        const quantity = Number(item.cantidad);
+                        if (!productId || !Number.isInteger(quantity) || quantity < 1) throw new Error('Las cantidades deben ser enteros mayores que cero.');
+                        quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) || 0) + quantity);
+                        if (!productSnapshots.has(productId)) {
+                            const productSnapshot = await transaction.get(doc(db, 'scm_productos', productId));
+                            if (!productSnapshot.exists()) throw new Error('Uno de los productos ya no está disponible.');
+                            productSnapshots.set(productId, productSnapshot);
+                        }
+                    }
+
+                    for (const [productId, quantity] of quantitiesByProduct) {
+                        const product = productSnapshots.get(productId).data();
+                        const stock = Number(product.stock_actual || 0);
+                        if (stock < quantity) throw new Error(`Stock insuficiente para ${product.nombre}. Disponible: ${stock}.`);
+                    }
+
+                    const normalizedItems = items.map(item => {
+                        const productSnapshot = productSnapshots.get(String(item.producto_id));
+                        const product = productSnapshot.data();
+                        const quantity = Number(item.cantidad);
+                        const unitPrice = Number(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0);
+                        if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error(`El precio de ${product.nombre} no es válido.`);
+                        return { producto_id: productSnapshot.id, cantidad: quantity, precio_unitario: unitPrice, subtotal: quantity * unitPrice };
+                    });
+                    const total = normalizedItems.reduce((sum, item) => sum + item.subtotal, 0);
+                    if (!Number.isFinite(total)) throw new Error('No se pudo calcular el total de la orden.');
+
+                    transaction.set(orderRef, {
+                        cliente_id: clienteId,
+                        fecha: timestamp,
+                        estado: 'pendiente',
+                        total,
+                        usuario_id: authenticatedUid,
+                        productos: normalizedItems
+                    });
                 });
-                return created.id;
+                return orderRef.id;
             },
             async processOrder(orderId, usuarioId) {
                 if (!canProcess) throw new Error('Tu rol no tiene permiso para procesar órdenes.');
+                const actorUid = auth.currentUser?.uid;
+                if (!actorUid) throw new Error('La sesión de Firebase expiró. Inicia sesión nuevamente.');
                 const orderRef = doc(db, 'erp_ordenes', orderId);
                 const processRef = doc(collection(db, 'erp_procesos'));
                 const reportRef = doc(collection(db, 'erp_reportes'));
@@ -173,14 +206,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
 
-                    transaction.update(orderRef, { estado: 'procesada', total, fecha_procesamiento: timestamp, usuario_procesa_id: usuarioId || userEmail });
+                    transaction.update(orderRef, { estado: 'procesada', total, fecha_procesamiento: timestamp, usuario_procesa_id: actorUid });
                     transaction.set(processRef, {
                         orden_id: orderId,
                         tipo: 'venta',
                         estado: 'completado',
                         fecha_inicio: timestamp,
                         fecha_fin: timestamp,
-                        usuario_id: usuarioId || userEmail,
+                        usuario_id: actorUid,
                         cliente_id: order.cliente_id,
                         total,
                         unidades_vendidas: unitsSold,
@@ -204,6 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (status === 'procesada') return this.processOrder(orderId, actorId);
                 if (status !== 'cancelada') throw new Error('Estado de orden no permitido.');
                 if (!canSell) throw new Error('Tu rol no tiene permiso para cancelar órdenes.');
+                const authenticatedUid = auth.currentUser?.uid;
+                if (!authenticatedUid) throw new Error('La sesión de Firebase expiró. Inicia sesión nuevamente.');
                 const orderRef = doc(db, 'erp_ordenes', orderId);
                 const processRef = doc(collection(db, 'erp_procesos'));
                 await runTransaction(db, async transaction => {
@@ -212,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (orderSnapshot.data().estado !== 'pendiente') throw new Error('Solo se pueden cancelar órdenes pendientes.');
                     const timestamp = new Date().toISOString();
                     transaction.update(orderRef, { estado: 'cancelada', fecha_cancelacion: timestamp });
-                    transaction.set(processRef, { orden_id: orderId, tipo: 'cancelacion', estado: 'completado', fecha_inicio: timestamp, fecha_fin: timestamp, usuario_id: actorId || userEmail });
+                    transaction.set(processRef, { orden_id: orderId, tipo: 'cancelacion', estado: 'completado', fecha_inicio: timestamp, fecha_fin: timestamp, usuario_id: authenticatedUid });
                 });
                 window.dispatchEvent(new CustomEvent('erp-order-updated', { detail: { orderId, estado: status } }));
             },
@@ -406,6 +441,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.querySelectorAll('[data-erp-tab]').forEach(tab => tab.addEventListener('click', () => openTab(tab.dataset.erpTab)));
         document.querySelectorAll('[data-erp-open-tab]').forEach(button => button.addEventListener('click', () => openTab(button.dataset.erpOpenTab)));
+        const erpView = $('view-erp');
+        if (erpView) {
+            new MutationObserver(() => {
+                if (erpView.classList.contains('active')) reload().catch(error => showNotice(error.message || 'No se pudieron actualizar los datos ERP.', 'error'));
+            }).observe(erpView, { attributes: true, attributeFilter: ['class'] });
+        }
         $('erpClientSelect').addEventListener('change', renderDraft);
         $('erpProductSelect').addEventListener('change', () => { $('erpProductQuantity').value = 1; });
         $('erpOrderStatusFilter').addEventListener('change', renderOrders);
@@ -431,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         $('erpCreateOrder').addEventListener('click', async () => {
             try {
-                const orderId = await erpApi.createOrder({ clienteId: $('erpClientSelect').value, items: state.draft, usuarioId: state.actorId });
+                const orderId = await erpApi.createOrder({ clienteId: $('erpClientSelect').value, items: state.draft });
                 state.draft = [];
                 await reload();
                 openTab('orders');

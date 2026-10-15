@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- 1. Firebase Setup (Dynamic Imports) ---
         let app, db;
         try {
-            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+            const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
             const { getFirestore, collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
 
             const firebaseConfig = {
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 measurementId: 'G-F3WW9ZDP57'
             };
 
-            app = initializeApp(firebaseConfig);
+            app = getApps().length ? getApp() : initializeApp(firebaseConfig);
             db = getFirestore(app);
 
             // --- 2. Funciones de Feedback y Utilidades ---
@@ -39,6 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 let hash = 0;
                 for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
                 return colors[Math.abs(hash % colors.length)];
+            }
+
+            function safeText(value) {
+                if (value === null || value === undefined) return '';
+                return String(value).trim();
             }
 
             // --- 3. CRUD Functions ---
@@ -292,9 +297,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const crmDetailEtapaBtn = document.getElementById('crmDetailEtapaBtn');
 
             // Delete Confirm Modal
-            const deleteConfirmModal = document.getElementById('deleteConfirmModal');
-            const deleteConfirmBtn = document.getElementById('deleteConfirmAccept');
-            const deleteCancelBtn = document.getElementById('deleteConfirmCancel');
+            const crmDeleteModal = document.getElementById('crmDeleteModal');
+            const crmDeleteText = document.getElementById('crmDeleteText');
+            const crmDeleteConfirmBtn = document.getElementById('crmDeleteAccept');
+            const crmDeleteCancelBtn = document.getElementById('crmDeleteCancel');
+            const crmDeleteCloseBtn = document.getElementById('crmDeleteClose');
+            const crmDeleteBackdrop = document.getElementById('crmDeleteBackdrop');
 
             const etapaColors = {
                 'Prospecto': '#3B82F6', // Blue
@@ -364,9 +372,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const etapaFilter = crmFilterEtapa?.value || '';
 
                     const filteredClients = currentClients.filter(c => {
-                        const matchSearch = c.nombre.toLowerCase().includes(searchTerm) || c.correo.toLowerCase().includes(searchTerm);
-                        const matchStatus = statusFilter === '' || c.estado === statusFilter;
-                        const matchEtapa = etapaFilter === '' || c.etapa_crm === etapaFilter;
+                        const nombre = safeText(c.nombre).toLowerCase();
+                        const correo = safeText(c.correo).toLowerCase();
+                        const empresa = safeText(c.empresa).toLowerCase();
+                        const estado = safeText(c.estado).toLowerCase();
+                        const etapa = safeText(c.etapa_crm);
+                        const matchSearch = !searchTerm || nombre.includes(searchTerm) || correo.includes(searchTerm) || empresa.includes(searchTerm);
+                        const matchStatus = statusFilter === '' || estado === statusFilter.toLowerCase();
+                        const matchEtapa = etapaFilter === '' || etapa === etapaFilter;
                         return matchSearch && matchStatus && matchEtapa;
                     });
 
@@ -376,26 +389,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     const visibleClients = filteredClients.slice(firstItem, firstItem + crmItemsPerPage);
 
                     crmClientsTableBody.innerHTML = '';
+                    if (!visibleClients.length) {
+                        crmClientsTableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No hay clientes registrados en la colección clientes.</td></tr>';
+                        renderPagination(crmClientsPagination, crmClientPage, totalPages, 'crm-page');
+                        return;
+                    }
+
                     visibleClients.forEach(c => {
                         const tr = document.createElement('tr');
-                        const bg = nameToColor(c.nombre);
-                        const etapaColor = etapaColors[c.etapa_crm] || '#6B7280';
-                        const badgeClass = c.estado === 'activo' ? 'bg-success' : 'bg-danger';
+                        const nombre = safeText(c.nombre) || 'Sin nombre';
+                        const correo = safeText(c.correo) || '—';
+                        const telefono = safeText(c.telefono) || '—';
+                        const empresa = safeText(c.empresa) || '—';
+                        const estado = safeText(c.estado) || 'activo';
+                        const etapa = safeText(c.etapa_crm) || 'Prospecto';
+                        const bg = nameToColor(nombre);
+                        const etapaColor = etapaColors[etapa] || '#6B7280';
+                        const badgeClass = estado.toLowerCase() === 'activo' ? 'bg-success' : 'bg-danger';
 
                         tr.innerHTML = `
                             <td>
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                     <div style="width: 35px; height: 35px; border-radius: 50%; background: ${bg}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
-                                        ${getInitials(c.nombre)}
+                                        ${getInitials(nombre)}
                                     </div>
-                                    <span>${c.nombre}</span>
+                                    <span>${nombre}</span>
                                 </div>
                             </td>
-                            <td>${c.correo}</td>
-                            <td>${c.telefono}</td>
-                            <td>${c.empresa || '—'}</td>
-                            <td><span class="badge ${badgeClass}" style="padding: 5px 10px; border-radius: 12px; color: white;">${c.estado}</span></td>
-                            <td><span style="background: ${etapaColor}; color: white; padding: 5px 10px; border-radius: 12px; font-size: 0.85em;">${c.etapa_crm}</span></td>
+                            <td>${correo}</td>
+                            <td>${telefono}</td>
+                            <td>${empresa}</td>
+                            <td><span class="badge ${badgeClass}" style="padding: 5px 10px; border-radius: 12px; color: white;">${estado}</span></td>
+                            <td><span style="background: ${etapaColor}; color: white; padding: 5px 10px; border-radius: 12px; font-size: 0.85em;">${etapa}</span></td>
                             <td>
                                 <button class="btn btn-sm btn-info btn-view-client" data-id="${c.id}" title="Ver Detalle"><i class="bi bi-eye"></i></button>
                                 <button class="btn btn-sm btn-primary btn-edit-client" data-id="${c.id}" title="Editar"><i class="bi bi-pencil"></i></button>
@@ -699,7 +724,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else if (btn.classList.contains('btn-delete-client')) {
                         clientToDelete = id;
-                        if (deleteConfirmModal) deleteConfirmModal.classList.remove('hidden');
+                        if (crmDeleteText) crmDeleteText.textContent = `¿Deseas eliminar a ${currentClients.find(client => client.id === id)?.nombre || 'este cliente'}?`;
+                        openModal(crmDeleteModal);
                     } else if (btn.classList.contains('btn-view-client')) {
                         const cliente = currentClients.find(c => c.id === id);
                         if (cliente && crmClientDetailModal) {
@@ -792,14 +818,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Confirmación Eliminar
-            if (deleteCancelBtn) {
-                deleteCancelBtn.addEventListener('click', () => {
+            [crmDeleteCancelBtn, crmDeleteCloseBtn, crmDeleteBackdrop].forEach(control => control?.addEventListener('click', () => {
                     clientToDelete = null;
-                    if (deleteConfirmModal) deleteConfirmModal.classList.add('hidden');
-                });
-            }
-            if (deleteConfirmBtn) {
-                deleteConfirmBtn.addEventListener('click', async () => {
+                    closeModal(crmDeleteModal);
+                }));
+            if (crmDeleteConfirmBtn) {
+                crmDeleteConfirmBtn.addEventListener('click', async () => {
                     if (clientToDelete) {
                         try {
                             await deleteCliente(clientToDelete);
@@ -810,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             showCRMFeedback('Error al eliminar.', 'error');
                         }
                         clientToDelete = null;
-                        if (deleteConfirmModal) deleteConfirmModal.classList.add('hidden');
+                        closeModal(crmDeleteModal);
                     }
                 });
             }

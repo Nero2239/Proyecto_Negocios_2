@@ -25,6 +25,8 @@ La etapa ERP consume las colecciones actuales de Firestore sin copiar sus catál
 
 `js/erp.js` expone `window.erpApi` con operaciones equivalentes a `POST/GET /ordenes`, `GET /ordenes/{id}`, `PUT /ordenes/{id}/estado`, `POST /ordenes/procesar`, `GET/PUT /erp/estado` y `GET /erp/metricas`. El procesamiento de ventas usa una transacción Firestore para descontar stock SCM, registrar movimientos, completar reposiciones PUSH necesarias y guardar la operación y el reporte ERP.
 
+La orden se crea con una transacción que valida el cliente CRM, el stock SCM y el total antes de guardarla. El total usa `precio_venta`; los productos existentes que aún no tengan ese campo conservan compatibilidad usando `costo_unitario` como valor de respaldo. Al procesar una orden se vuelve a validar el stock y se actualizan en conjunto inventario, movimientos, orden, proceso, reposición PUSH y reporte. Los cambios CRM/SCM se reflejan al volver a abrir el módulo ERP; no se insertan clientes ficticios al cargar CRM.
+
 Este proyecto no contiene una API REST ni Firebase Functions: las operaciones transaccionales se ejecutan desde el cliente contra Firestore, protegidas por `firestore.rules`.
 
 ## Activar autenticación y reglas

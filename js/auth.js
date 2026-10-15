@@ -167,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error('No se pudo iniciar sesión:', error);
                 const messages = {
+                    'auth/operation-not-allowed': 'El acceso con correo y contraseña está desactivado. Un administrador debe habilitarlo en Firebase Console > Authentication > Sign-in method.',
                     'auth/invalid-credential': 'Correo o contraseña incorrectos.',
                     'auth/user-not-found': 'No existe una cuenta con ese correo.',
                     'auth/wrong-password': 'Correo o contraseña incorrectos.',
@@ -202,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error('No se pudo registrar la cuenta:', error);
                 const messages = {
+                    'auth/operation-not-allowed': 'El registro con correo y contraseña está desactivado. Un administrador debe habilitarlo en Firebase Console > Authentication > Sign-in method.',
                     'auth/email-already-in-use': 'Ya existe una cuenta con ese correo.',
                     'auth/invalid-email': 'Escribe un correo válido.',
                     'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.'

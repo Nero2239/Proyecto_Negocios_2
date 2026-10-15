@@ -1,21 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function signedIn() {
       return request.auth != null && request.auth.token.email_verified == true;
     }
 
-    function profilePath() {
-      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    function profilePath(uid) {
+      return /databases/$(database)/documents/usuarios/$(uid);
     }
 
-    function hasProfile() {
-      return signedIn() && exists(profilePath());
+    function userProfile(uid) {
+      return get(profilePath(uid));
     }
 
     function hasRole(roleName) {
-      return hasProfile() && get(profilePath()).data.auth_uid == request.auth.uid
-        && get(profilePath()).data.rol == roleName;
+      return signedIn()
+        && exists(profilePath(request.auth.uid))
+        && userProfile(request.auth.uid).data.auth_uid == request.auth.uid
+        && userProfile(request.auth.uid).data.rol == roleName;
     }
 
     function isAdmin() { return hasRole('admin'); }
@@ -35,54 +38,70 @@ service cloud.firestore {
     }
 
     match /usuarios/{userId} {
-      allow get, list: if isAdmin()
-        || (signedIn() && (userId == request.auth.uid || resource.data.email == request.auth.token.email));
-      allow create: if isAdmin()
-        || (signedIn()
+      allow get: if signedIn() && (userId == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if signedIn()
+        && userId == request.auth.uid
+        && !exists(profilePath(userId))
+        && request.resource.data.keys().hasOnly(['uid', 'auth_uid', 'email', 'nombre', 'rol', 'creado_en', 'ultimo_acceso'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.auth_uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.rol == 'usuario'
+        && request.resource.data.nombre is string;
+
+      allow update: if isAdmin()
+        || (
+          signedIn()
           && userId == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
           && request.resource.data.auth_uid == request.auth.uid
           && request.resource.data.email == request.auth.token.email
           && request.resource.data.rol == 'usuario'
-          && request.resource.data.keys().hasOnly(['uid', 'auth_uid', 'email', 'nombre', 'rol', 'creado_en']));
-      allow update: if isAdmin()
-        || (signedIn()
-          && userId == request.auth.uid
-          && request.resource.data.auth_uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimo_acceso']));
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nombre', 'ultimo_acceso'])
+        );
+
       allow delete: if isAdmin();
     }
 
     match /clientes/{clientId} {
       allow read: if isStaff() || (signedIn() && resource.data.correo == request.auth.token.email);
       allow create: if isStaff() || (signedIn() && request.resource.data.correo == request.auth.token.email);
-      allow update, delete: if isAdmin() || isSales();
+      allow update: if isAdmin() || isSales();
+      allow delete: if isAdmin();
     }
 
     match /interacciones/{interactionId} {
       allow read: if isAdmin() || isSales();
       allow create: if isAdmin() || isSales();
-      allow update, delete: if isAdmin() || isSales();
+      allow update: if isAdmin() || isSales();
+      allow delete: if isAdmin();
     }
 
     match /scm_productos/{productId} {
       allow read: if true;
-      allow create, delete: if canManageSCM();
+      allow create: if canManageSCM();
       allow update: if canManageSCM()
         || (isSales()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock_actual', 'reposicion_pendiente_id', 'ultimo_erp_orden_id'])
           && processedERPOrder(request.resource.data.ultimo_erp_orden_id));
+      allow delete: if canManageSCM();
     }
 
     match /scm_proveedores/{supplierId} {
       allow read: if isStaff();
-      allow create, update, delete: if canManageSCM();
+      allow create: if canManageSCM();
+      allow update: if canManageSCM();
+      allow delete: if canManageSCM();
     }
 
     match /scm_movimientos/{movementId} {
       allow read: if isStaff();
       allow create: if canManageSCM()
         || (isSales() && processedERPOrder(request.resource.data.erp_orden_id));
-      allow update, delete: if canManageSCM();
+      allow update: if canManageSCM();
+      allow delete: if canManageSCM();
     }
 
     match /scm_pedidos/{orderId} {
@@ -103,7 +122,9 @@ service cloud.firestore {
 
     match /scm_config/{configId} {
       allow read: if isStaff();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /erp_ordenes/{orderId} {
@@ -131,13 +152,15 @@ service cloud.firestore {
       allow create: if (isAdmin() || isSales() || isLogistics())
         && request.resource.data.usuario_id == request.auth.uid
         && completedERPOrder(request.resource.data.orden_id);
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /erp_recursos/{resourceId} {
       allow read: if isStaff();
       allow create: if (isAdmin() || isLogistics()) && request.resource.data.creado_por == request.auth.uid;
-      allow update, delete: if isAdmin() || isLogistics();
+      allow update: if isAdmin() || isLogistics();
+      allow delete: if isAdmin() || isLogistics();
     }
 
     match /erp_reportes/{reportId} {
@@ -145,12 +168,15 @@ service cloud.firestore {
       allow create: if (isAdmin() || isSales() || isLogistics())
         && request.resource.data.tipo == 'orden_procesada'
         && processedERPOrder(request.resource.data.orden_id);
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /erp_estado/{stateId} {
       allow read: if isStaff();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
   }
 }
