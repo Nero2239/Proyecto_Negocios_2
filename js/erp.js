@@ -88,10 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (stock < quantity) throw new Error(`Stock insuficiente para ${product.nombre}. Disponible: ${stock}.`);
                     }
 
-                    const normalizedItems = items.map(item => {
-                        const productSnapshot = productSnapshots.get(String(item.producto_id));
+                    const normalizedItems = [...quantitiesByProduct].map(([productId, quantity]) => {
+                        const productSnapshot = productSnapshots.get(productId);
                         const product = productSnapshot.data();
-                        const quantity = Number(item.cantidad);
                         const unitPrice = Number(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0);
                         if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error(`El precio de ${product.nombre} no es válido.`);
                         return { producto_id: productSnapshot.id, cantidad: quantity, precio_unitario: unitPrice, subtotal: quantity * unitPrice };
@@ -131,8 +130,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     const clientSnapshot = await transaction.get(clientRef);
                     if (!clientSnapshot.exists()) throw new Error('El cliente relacionado ya no existe en CRM.');
 
-                    const productRows = [];
+                    const orderLinesByProduct = new Map();
                     for (const line of order.productos) {
+                        const productId = String(line.producto_id || '');
+                        const quantity = Number(line.cantidad);
+                        if (!productId || !Number.isInteger(quantity) || quantity < 1) throw new Error('La orden contiene un producto o cantidad no válida.');
+                        const subtotal = Number(line.subtotal ?? Number(line.precio_unitario || 0) * quantity);
+                        const existingLine = orderLinesByProduct.get(productId);
+                        if (existingLine) {
+                            existingLine.cantidad += quantity;
+                            existingLine.subtotal += subtotal;
+                        } else {
+                            orderLinesByProduct.set(productId, { ...line, producto_id: productId, cantidad: quantity, subtotal });
+                        }
+                    }
+                    const productRows = [];
+                    for (const line of orderLinesByProduct.values()) {
                         const productRef = doc(db, 'scm_productos', line.producto_id);
                         const productSnapshot = await transaction.get(productRef);
                         if (!productSnapshot.exists()) throw new Error('Uno de los productos ya no existe en SCM.');
@@ -294,7 +307,12 @@ document.addEventListener('DOMContentLoaded', () => {
             async updateUserRole(userId, nextRole, actorId) {
                 const allowedRoles = ['admin', 'ventas', 'logistica', 'usuario'];
                 if (!canManage || !allowedRoles.includes(nextRole)) throw new Error('No tienes permiso para cambiar este rol.');
+                const authenticatedUid = auth.currentUser?.uid;
+                if (!authenticatedUid || authenticatedUid !== authContext.uid) throw new Error('La sesión de administrador expiró. Inicia sesión nuevamente.');
+                if (userId === authenticatedUid) throw new Error('No puedes cambiar el rol de tu propia cuenta.');
                 const userRef = doc(db, 'usuarios', userId);
+                const userSnapshot = await getDoc(userRef);
+                if (!userSnapshot.exists() || userSnapshot.data().auth_uid !== userId) throw new Error('El perfil no está vinculado correctamente a su UID y no se puede asignar un rol.');
                 await updateDoc(userRef, { rol: nextRole, rol_actualizado: new Date().toISOString(), actualizado_por: actorId || userEmail });
                 return { id: userId, rol: nextRole };
             }
@@ -306,13 +324,34 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-erp-tab="maturity"]').forEach(tab => tab.classList.toggle('hidden', !canManage));
         document.querySelectorAll('[data-erp-tab="resources"]').forEach(tab => tab.classList.toggle('hidden', !canManageResources));
         document.querySelectorAll('[data-erp-tab="users"], [data-erp-panel="users"]').forEach(element => element.classList.toggle('hidden', !canManage));
+        const erpTabsByRole = {
+            admin: ['dashboard', 'orders', 'products', 'clients', 'inventory', 'users', 'processes', 'resources', 'maturity', 'reports'],
+            ventas: ['dashboard', 'orders', 'products', 'clients', 'inventory', 'processes', 'reports'],
+            logistica: ['dashboard', 'orders', 'products', 'inventory', 'processes', 'resources', 'reports']
+        };
+        const accessibleErpTabs = new Set(erpTabsByRole[role] || []);
+        document.querySelectorAll('[data-erp-tab], [data-erp-panel]').forEach(element => {
+            const tabName = element.dataset.erpTab || element.dataset.erpPanel;
+            element.classList.toggle('hidden', !accessibleErpTabs.has(tabName));
+        });
         document.querySelector('.erp-order-builder')?.classList.toggle('hidden', !canSell);
         $('erpResourceForm')?.classList.toggle('hidden', !canManageResources);
         $('erpMaturityForm')?.classList.toggle('hidden', !canManage);
         $('erpCreateOrder')?.classList.toggle('hidden', !canSell);
+        $('erpCreateScmProduct')?.classList.toggle('hidden', !canManageResources);
+        $('erpAddInventoryMovement')?.classList.toggle('hidden', !canManageResources);
         $('erpOpenScmProducts')?.classList.toggle('hidden', !canManageResources);
         $('erpOpenCrmClients')?.classList.toggle('hidden', !canSell);
+        $('erpCreateCrmClient')?.classList.toggle('hidden', !canSell);
         $('erpOpenScmInventory')?.classList.toggle('hidden', !canManageResources);
+        const setScmActionAvailability = () => {
+            ['erpCreateScmProduct', 'erpAddInventoryMovement'].forEach(id => {
+                const button = $(id);
+                if (button) button.disabled = !canManageResources || !window.scmApi;
+            });
+        };
+        setScmActionAvailability();
+        window.addEventListener('scm-api-ready', setScmActionAvailability, { once: true });
 
         function showNotice(message, type = 'success') {
             const element = $('erpNotice');
@@ -405,7 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalPages = Math.max(1, Math.ceil(products.length / erpPageSize));
             state.pages.products = Math.min(state.pages.products, totalPages);
             const visibleProducts = products.slice((state.pages.products - 1) * erpPageSize, state.pages.products * erpPageSize);
-            $('erpProductsTable').innerHTML = visibleProducts.length ? `<table class="erp-orders-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Precio de venta</th><th>Costo</th><th>Existencias</th><th>Mínimo</th><th>Estrategia</th><th>Origen</th></tr></thead><tbody>${visibleProducts.map(product => `<tr><td>${escapeHtml(product.nombre || 'Sin nombre')}</td><td>${escapeHtml(product.categoria || '—')}</td><td>${money(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0)}</td><td>${money(product.costo_unitario || 0)}</td><td>${Number(product.stock_actual || 0)}</td><td>${Number(product.stock_minimo || 0)}</td><td>${escapeHtml(product.estrategia_logistica || '—')}</td><td>${escapeHtml(product.origen || 'tienda')}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay productos SCM que coincidan con el filtro.</p>';
+            $('erpProductsTable').innerHTML = visibleProducts.length ? `<table class="erp-orders-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Precio de venta</th><th>Costo</th><th>Existencias</th><th>Mínimo</th><th>Estrategia</th><th>Origen</th>${canManageResources ? '<th>Acciones</th>' : ''}</tr></thead><tbody>${visibleProducts.map(product => `<tr><td>${escapeHtml(product.nombre || 'Sin nombre')}</td><td>${escapeHtml(product.categoria || '—')}</td><td>${money(product.precio_venta ?? product.precio ?? product.costo_unitario ?? 0)}</td><td>${money(product.costo_unitario || 0)}</td><td>${Number(product.stock_actual || 0)}</td><td>${Number(product.stock_minimo || 0)}</td><td>${escapeHtml(product.estrategia_logistica || '—')}</td><td>${escapeHtml(product.origen || 'tienda')}</td>${canManageResources ? `<td><button class="erp-action-button" type="button" data-erp-edit-product="${escapeHtml(product.id)}">Editar</button> <button class="erp-action-button erp-action-danger" type="button" data-erp-delete-product="${escapeHtml(product.id)}">Eliminar</button></td>` : ''}</tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay productos SCM que coincidan con el filtro.</p>';
             renderPageControls('erpProductsPagination', 'products', products.length);
         }
 
@@ -424,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalPages = Math.max(1, Math.ceil(clients.length / erpPageSize));
             state.pages.clients = Math.min(state.pages.clients, totalPages);
             const visibleClients = clients.slice((state.pages.clients - 1) * erpPageSize, state.pages.clients * erpPageSize);
-            $('erpClientsTable').innerHTML = visibleClients.length ? `<table class="erp-orders-table"><thead><tr><th>Cliente</th><th>Correo</th><th>Teléfono</th><th>Empresa</th><th>Estado</th><th>Etapa CRM</th></tr></thead><tbody>${visibleClients.map(client => `<tr><td>${escapeHtml(client.nombre || 'Sin nombre')}</td><td>${escapeHtml(client.correo || '—')}</td><td>${escapeHtml(client.telefono || '—')}</td><td>${escapeHtml(client.empresa || '—')}</td><td>${escapeHtml(client.estado || 'activo')}</td><td>${escapeHtml(client.etapa_crm || 'Prospecto')}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay clientes CRM que coincidan con el filtro.</p>';
+            $('erpClientsTable').innerHTML = visibleClients.length ? `<table class="erp-orders-table"><thead><tr><th>Cliente</th><th>Correo</th><th>Teléfono</th><th>Empresa</th><th>Estado</th><th>Etapa CRM</th>${canSell ? '<th>Acciones</th>' : ''}</tr></thead><tbody>${visibleClients.map(client => `<tr><td>${escapeHtml(client.nombre || 'Sin nombre')}</td><td>${escapeHtml(client.correo || '—')}</td><td>${escapeHtml(client.telefono || '—')}</td><td>${escapeHtml(client.empresa || '—')}</td><td>${escapeHtml(client.estado || 'activo')}</td><td>${escapeHtml(client.etapa_crm || 'Prospecto')}</td>${canSell ? `<td><button class="erp-action-button" type="button" data-erp-edit-client="${escapeHtml(client.id)}">Editar</button>${canManage ? ` <button class="erp-action-button erp-action-danger" type="button" data-erp-delete-client="${escapeHtml(client.id)}">Eliminar</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay clientes CRM que coincidan con el filtro.</p>';
             renderPageControls('erpClientsPagination', 'clients', clients.length);
         }
 
@@ -451,12 +490,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalPages = Math.max(1, Math.ceil(products.length / erpPageSize));
             state.pages.inventory = Math.min(state.pages.inventory, totalPages);
             const visibleProducts = products.slice((state.pages.inventory - 1) * erpPageSize, state.pages.inventory * erpPageSize);
-            $('erpInventoryTable').innerHTML = visibleProducts.length ? `<table class="erp-orders-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Existencias</th><th>Mínimo</th><th>Estado</th><th>Último movimiento</th></tr></thead><tbody>${visibleProducts.map(product => {
+            $('erpInventoryTable').innerHTML = visibleProducts.length ? `<table class="erp-orders-table"><thead><tr><th>Producto</th><th>Categoría</th><th>Existencias</th><th>Mínimo</th><th>Estado</th><th>Último movimiento</th>${canManageResources ? '<th>Acción</th>' : ''}</tr></thead><tbody>${visibleProducts.map(product => {
                 const stock = Number(product.stock_actual || 0);
                 const minimum = Number(product.stock_minimo || 0);
                 const status = stock === 0 ? 'Agotado' : stock <= minimum ? 'Crítico' : 'Disponible';
                 const movement = latestMovements.get(product.id);
-                return `<tr><td>${escapeHtml(product.nombre || 'Sin nombre')}</td><td>${escapeHtml(product.categoria || '—')}</td><td>${stock}</td><td>${minimum}</td><td>${status}</td><td>${movement ? `${escapeHtml(movement.tipo || 'movimiento')} · ${new Date(movement.fecha).toLocaleDateString('es-MX')}` : 'Sin movimientos'}</td></tr>`;
+                return `<tr><td>${escapeHtml(product.nombre || 'Sin nombre')}</td><td>${escapeHtml(product.categoria || '—')}</td><td>${stock}</td><td>${minimum}</td><td>${status}</td><td>${movement ? `${escapeHtml(movement.tipo || 'movimiento')} · ${new Date(movement.fecha).toLocaleDateString('es-MX')}` : 'Sin movimientos'}</td>${canManageResources ? `<td><button class="erp-action-button" type="button" data-erp-inventory-movement="${escapeHtml(product.id)}">Registrar</button></td>` : ''}</tr>`;
             }).join('')}</tbody></table>` : '<p class="erp-empty">No hay productos de inventario que coincidan con el filtro.</p>';
             renderPageControls('erpInventoryPagination', 'inventory', products.length);
         }
@@ -479,7 +518,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const totalPages = Math.max(1, Math.ceil(orders.length / erpPageSize));
             state.pages.orders = Math.min(state.pages.orders, totalPages);
             const visibleOrders = orders.slice((state.pages.orders - 1) * erpPageSize, state.pages.orders * erpPageSize);
-            $('erpOrdersTable').innerHTML = visibleOrders.length ? `<table class="erp-orders-table"><thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${visibleOrders.map(order => `<tr><td>${escapeHtml(order.id.slice(0, 7).toUpperCase())}</td><td>${new Date(order.fecha).toLocaleDateString('es-MX')}</td><td>${escapeHtml(customerName(order.cliente_id))}</td><td>${renderOrderLines(order)}</td><td>${money(order.total)}</td><td><span class="erp-status ${order.estado === 'procesada' ? 'processed' : ''}">${escapeHtml(order.estado)}</span></td><td>${order.estado === 'pendiente' && canProcess ? `<button type="button" class="erp-action-button" data-process-order="${escapeHtml(order.id)}">Procesar</button>` : order.estado === 'pendiente' && canSell ? `<button type="button" class="erp-action-button" data-cancel-order="${escapeHtml(order.id)}">Cancelar</button>` : '—'}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">No hay órdenes que coincidan con el filtro.</p>';
+            $('erpOrdersTable').innerHTML = visibleOrders.length ? `<table class="erp-orders-table"><thead><tr><th>Orden</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Estado</th><th>Acción</th></tr></thead><tbody>${visibleOrders.map(order => {
+                const status = { pendiente: 'Pendiente', procesada: 'Procesada', cancelada: 'Cancelada' }[order.estado] || order.estado;
+                const statusClass = order.estado === 'procesada' ? 'processed' : order.estado === 'cancelada' ? 'cancelled' : '';
+                return `<tr><td>${escapeHtml(order.id.slice(0, 7).toUpperCase())}</td><td>${new Date(order.fecha).toLocaleDateString('es-MX')}</td><td>${escapeHtml(customerName(order.cliente_id))}</td><td>${renderOrderLines(order)}</td><td>${money(order.total)}</td><td><span class="erp-status ${statusClass}">${escapeHtml(status)}</span></td><td>${order.estado === 'pendiente' && canProcess ? `<button type="button" class="erp-action-button" data-process-order="${escapeHtml(order.id)}">Procesar</button>` : order.estado === 'pendiente' && canSell ? `<button type="button" class="erp-action-button" data-cancel-order="${escapeHtml(order.id)}">Cancelar</button>` : '—'}</td></tr>`;
+            }).join('')}</tbody></table>` : '<p class="erp-empty">No hay órdenes que coincidan con el filtro.</p>';
             renderPageControls('erpOrdersPagination', 'orders', orders.length);
             $('erpRecentOrders').innerHTML = orderRows([...state.orders].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 5));
         }
@@ -521,7 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
             $('erpMaturityChecklist').innerHTML = checks.map(([label, complete]) => `<li><i class="bi ${complete ? 'bi-check-square-fill' : 'bi-square'}"></i><span>${label}</span></li>`).join('');
         }
 
-        function renderSalesChart() {
+        function renderSalesChart(containerId = 'erpSalesChart') {
             const names = [];
             const now = new Date();
             for (let offset = 5; offset >= 0; offset--) {
@@ -530,7 +573,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const totals = names.map(month => state.orders.filter(order => order.estado === 'procesada' && monthKey(order.fecha_procesamiento || order.fecha) === month.key).reduce((sum, order) => sum + Number(order.total || 0), 0));
             const max = Math.max(...totals, 1);
-            $('erpSalesChart').innerHTML = names.map((month, index) => `<div class="erp-month-column"><div class="erp-month-bar-wrap"><div class="erp-month-bar" style="height:${Math.max(totals[index] ? 8 : 3, totals[index] / max * 100)}%" title="${money(totals[index])}"></div></div><small class="erp-month-value">${totals[index] ? money(totals[index]) : '$0'}</small><span class="erp-month-label">${escapeHtml(month.label)}</span></div>`).join('');
+            $(containerId).innerHTML = names.map((month, index) => `<div class="erp-month-column"><div class="erp-month-bar-wrap"><div class="erp-month-bar" style="height:${Math.max(totals[index] ? 8 : 3, totals[index] / max * 100)}%" title="${money(totals[index])}"></div></div><small class="erp-month-value">${totals[index] ? money(totals[index]) : '$0'}</small><span class="erp-month-label">${escapeHtml(month.label)}</span></div>`).join('');
+        }
+
+        function renderReportCharts() {
+            renderSalesChart('erpReportSalesChart');
+
+            const soldByProduct = new Map();
+            state.orders.filter(order => order.estado === 'procesada').forEach(order => {
+                (order.productos || []).forEach(line => {
+                    soldByProduct.set(line.producto_id, (soldByProduct.get(line.producto_id) || 0) + Number(line.cantidad || 0));
+                });
+            });
+            const bestSellers = [...soldByProduct.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const maxSold = Math.max(...bestSellers.map(([, quantity]) => quantity), 1);
+            $('erpReportTopProducts').innerHTML = bestSellers.length ? bestSellers.map(([productId, quantity]) => `<div class="erp-report-bar-row"><span>${escapeHtml(productName(productId))}</span><div class="erp-report-bar-track"><span class="erp-report-bar-fill" style="width:${quantity / maxSold * 100}%"></span></div><strong>${quantity}</strong></div>`).join('') : '<p class="erp-empty">Los productos más vendidos aparecerán al procesar órdenes.</p>';
+
+            const inventory = state.products.reduce((summary, product) => {
+                const stock = Number(product.stock_actual || 0);
+                const minimum = Number(product.stock_minimo || 0);
+                summary[stock <= 0 ? 'empty' : stock <= minimum ? 'critical' : 'available'] += 1;
+                return summary;
+            }, { available: 0, critical: 0, empty: 0 });
+            const totalProducts = state.products.length;
+            const inventoryRows = [['Disponible', inventory.available, 'available'], ['Stock crítico', inventory.critical, 'critical'], ['Agotado', inventory.empty, 'empty']];
+            $('erpReportInventoryChart').innerHTML = totalProducts ? inventoryRows.map(([label, count, type]) => `<div class="erp-report-bar-row"><span>${label}</span><div class="erp-report-bar-track"><span class="erp-report-bar-fill ${type}" style="width:${count / totalProducts * 100}%"></span></div><strong>${count}</strong></div>`).join('') : '<p class="erp-empty">No hay productos registrados en SCM.</p>';
         }
 
         function renderDashboard(metrics) {
@@ -549,6 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const modules = [['CRM · Clientes', `${state.clients.length} clientes`], ['SCM · Productos', `${state.products.length} productos`], ['SCM · Inventario', `${metrics.inventario_disponible} unidades disponibles`], ['ERP · Órdenes', `${state.orders.length} órdenes empresariales`]];
             $('erpIntegrationStatus').innerHTML = modules.map(([label, detail]) => `<div class="erp-integration-row"><div><strong>${label}</strong><br><span>${detail}</span></div><i class="bi bi-check-circle-fill erp-integration-ok" aria-label="Conectado"></i></div>`).join('');
             renderSalesChart();
+            renderReportCharts();
             renderOrders();
             $('erpReportsTable').innerHTML = state.reports.length ? `<table class="erp-orders-table"><thead><tr><th>Fecha</th><th>Orden</th><th>Ventas</th><th>Unidades</th><th>Cliente</th></tr></thead><tbody>${[...state.reports].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).map(report => `<tr><td>${new Date(report.fecha).toLocaleString('es-MX')}</td><td>${escapeHtml(String(report.orden_id || '').slice(0, 7).toUpperCase())}</td><td>${money(report.ventas)}</td><td>${Number(report.unidades_vendidas || 0)}</td><td>${escapeHtml(customerName(report.cliente_id))}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">Los reportes se generan al procesar órdenes.</p>';
         }
@@ -603,10 +671,82 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (erpView.classList.contains('active')) reload().catch(error => showNotice(error.message || 'No se pudieron actualizar los datos ERP.', 'error'));
             }).observe(erpView, { attributes: true, attributeFilter: ['class'] });
         }
+        window.addEventListener('scm-products-updated', () => {
+            reload().catch(error => showNotice(error.message || 'No se pudo actualizar el catálogo ERP.', 'error'));
+        });
+        window.addEventListener('scm-inventory-updated', () => {
+            reload().catch(error => showNotice(error.message || 'No se pudo actualizar el inventario ERP.', 'error'));
+        });
+        window.addEventListener('crm-data-updated', () => {
+            reload().catch(error => showNotice(error.message || 'No se pudo actualizar CRM en ERP.', 'error'));
+        });
         $('erpClientSelect').addEventListener('change', renderDraft);
         $('erpProductsSearch').addEventListener('input', () => { state.pages.products = 1; renderProducts(); });
         $('erpProductsStockFilter').addEventListener('change', () => { state.pages.products = 1; renderProducts(); });
         $('erpProductsSort').addEventListener('change', () => { state.pages.products = 1; renderProducts(); });
+        $('erpCreateScmProduct').addEventListener('click', () => {
+            if (!canManageResources) return showNotice('Tu rol no puede administrar productos SCM.', 'error');
+            if (!window.scmApi) return showNotice('El módulo SCM todavía se está iniciando. Inténtalo de nuevo en unos segundos.', 'error');
+            try {
+                window.scmApi.openProductForm();
+            } catch (error) {
+                showNotice(error.message || 'No se pudo abrir el formulario de productos.', 'error');
+            }
+        });
+        $('erpCreateCrmClient').addEventListener('click', () => {
+            if (!canSell) return showNotice('Tu rol no puede administrar clientes CRM.', 'error');
+            if (!window.crmApi) return showNotice('El módulo CRM todavía se está iniciando. Inténtalo de nuevo en unos segundos.', 'error');
+            try {
+                window.crmApi.openCreateClient();
+            } catch (error) {
+                showNotice(error.message || 'No se pudo abrir el formulario de clientes.', 'error');
+            }
+        });
+        $('erpAddInventoryMovement').addEventListener('click', () => {
+            if (!canManageResources) return showNotice('Tu rol no puede modificar el inventario SCM.', 'error');
+            if (!window.scmApi) return showNotice('El módulo SCM todavía se está iniciando. Inténtalo de nuevo en unos segundos.', 'error');
+            try {
+                window.scmApi.openInventoryMovementForm();
+            } catch (error) {
+                showNotice(error.message || 'No se pudo abrir el formulario de inventario.', 'error');
+            }
+        });
+        $('erpInventoryTable').addEventListener('click', event => {
+            const button = event.target.closest('[data-erp-inventory-movement]');
+            if (!button) return;
+            if (!canManageResources || !window.scmApi) return showNotice('No está disponible la administración del inventario SCM.', 'error');
+            try {
+                window.scmApi.openInventoryMovementForm(button.dataset.erpInventoryMovement);
+            } catch (error) {
+                showNotice(error.message || 'No se pudo abrir el formulario de inventario.', 'error');
+            }
+        });
+        $('erpProductsTable').addEventListener('click', event => {
+            const editButton = event.target.closest('[data-erp-edit-product]');
+            const deleteButton = event.target.closest('[data-erp-delete-product]');
+            const productId = editButton?.dataset.erpEditProduct || deleteButton?.dataset.erpDeleteProduct;
+            if (!productId) return;
+            if (!canManageResources || !window.scmApi) return showNotice('No está disponible la administración de productos SCM.', 'error');
+            try {
+                if (editButton) window.scmApi.editProduct(productId);
+                else window.scmApi.openDeleteProduct(productId);
+            } catch (error) {
+                showNotice(error.message || 'No se pudo abrir la acción del producto.', 'error');
+            }
+        });
+        $('erpClientsTable').addEventListener('click', async event => {
+            const editButton = event.target.closest('[data-erp-edit-client]');
+            const deleteButton = event.target.closest('[data-erp-delete-client]');
+            const clientId = editButton?.dataset.erpEditClient || deleteButton?.dataset.erpDeleteClient;
+            if (!clientId) return;
+            if (!canSell || !window.crmApi) return showNotice('No está disponible la administración de clientes CRM.', 'error');
+            try {
+                if (editButton) await window.crmApi.editClient(clientId);
+                else await window.crmApi.deleteClient(clientId);
+            } catch (error) {
+                showNotice(error.message || 'No se pudo abrir la acción del cliente.', 'error');
+            }
+        });
         $('erpOpenScmProducts').addEventListener('click', () => document.querySelector('.nav-link[data-view="scm-productos"]')?.click());
         $('erpClientsSearch').addEventListener('input', () => { state.pages.clients = 1; renderClients(); });
         $('erpClientsStatus').addEventListener('change', () => { state.pages.clients = 1; renderClients(); });
@@ -647,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 render();
             });
         });
-        $('erpAddProduct').addEventListener('click', () => {
+        $('erpAddOrderLine').addEventListener('click', () => {
             const selectedLine = selectedOrderLine();
             if (!selectedLine) return showNotice('Selecciona un producto e indica una cantidad entera mayor que cero.', 'error');
             const product = state.products.find(item => item.id === selectedLine.producto_id);
@@ -705,13 +845,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         $('erpResourceForm').addEventListener('submit', async event => {
             event.preventDefault();
+            const form = event.currentTarget;
             if (!canManageResources) return showNotice('Tu rol no puede administrar recursos ERP.', 'error');
-            const formData = new FormData(event.currentTarget);
+            const formData = new FormData(form);
             const nombre = String(formData.get('nombre') || '').trim();
             if (!nombre) return showNotice('Escribe el nombre del recurso.', 'error');
             try {
                 await erpApi.addResource({ nombre, tipo: formData.get('tipo'), responsable_id: formData.get('responsable_id') || '' }, state.actorId);
-                event.currentTarget.reset();
+                form.reset();
                 await reload();
                 showNotice('Recurso interno registrado.');
             } catch (error) { showNotice(error.message || 'No se pudo registrar el recurso.', 'error'); }

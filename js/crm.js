@@ -674,6 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             editingClientId = null;
                             closeModal(crmClientModal);
                             renderCRMClients();
+                            window.dispatchEvent(new CustomEvent('crm-data-updated'));
                         } catch (error) {
                             console.error(error);
                             showCRMFeedback('Error al guardar el cliente.', 'error');
@@ -697,6 +698,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Guardar cliente';
                 openModal(crmClientModal);
             });
+            function openClientEditor(client) {
+                crmClientName.value = client.nombre || '';
+                crmClientEmail.value = client.correo || '';
+                crmClientPhone.value = client.telefono || '';
+                crmClientCompany.value = client.empresa || '';
+                crmClientStatus.value = client.estado || 'activo';
+                crmClientEtapa.value = client.etapa_crm || 'Prospecto';
+                editingClientId = client.id;
+                if (crmClientFormTitle) crmClientFormTitle.textContent = 'Editar Cliente';
+                if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Actualizar';
+                openModal(crmClientModal);
+            }
+            window.crmApi = {
+                openCreateClient() {
+                    if (!['admin', 'ventas'].includes(String(localStorage.getItem('userRole') || '').toLowerCase())) throw new Error('Tu rol no puede administrar clientes CRM.');
+                    editingClientId = null;
+                    crmClientForm?.reset();
+                    if (crmClientFormTitle) crmClientFormTitle.textContent = 'Nuevo cliente CRM';
+                    if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Guardar cliente';
+                    openModal(crmClientModal);
+                },
+                async editClient(clientId) {
+                    if (!['admin', 'ventas'].includes(String(localStorage.getItem('userRole') || '').toLowerCase())) throw new Error('Tu rol no puede administrar clientes CRM.');
+                    const client = await getClienteById(clientId);
+                    if (!client) throw new Error('El cliente ya no existe.');
+                    openClientEditor(client);
+                },
+                async deleteClient(clientId) {
+                    if (String(localStorage.getItem('userRole') || '').toLowerCase() !== 'admin') throw new Error('Solo administración puede eliminar clientes CRM.');
+                    const client = await getClienteById(clientId);
+                    if (!client) throw new Error('El cliente ya no existe.');
+                    clientToDelete = clientId;
+                    if (crmDeleteText) crmDeleteText.textContent = `¿Deseas eliminar a ${client.nombre || 'este cliente'}?`;
+                    openModal(crmDeleteModal);
+                }
+            };
+            window.dispatchEvent(new CustomEvent('crm-api-ready', { detail: window.crmApi }));
             crmClientModalClose?.addEventListener('click', () => closeModal(crmClientModal));
             crmClientModalBackdrop?.addEventListener('click', () => closeModal(crmClientModal));
 
@@ -711,16 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (btn.classList.contains('btn-edit-client')) {
                         const cliente = currentClients.find(c => c.id === id);
                         if (cliente) {
-                            crmClientName.value = cliente.nombre;
-                            crmClientEmail.value = cliente.correo;
-                            crmClientPhone.value = cliente.telefono;
-                            crmClientCompany.value = cliente.empresa || '';
-                            crmClientStatus.value = cliente.estado;
-                            crmClientEtapa.value = cliente.etapa_crm;
-                            editingClientId = id;
-                            if (crmClientFormTitle) crmClientFormTitle.textContent = 'Editar Cliente';
-                            if (crmClientFormSubmitBtn) crmClientFormSubmitBtn.textContent = 'Actualizar';
-                            openModal(crmClientModal);
+                            openClientEditor(cliente);
                         }
                     } else if (btn.classList.contains('btn-delete-client')) {
                         clientToDelete = id;
@@ -829,6 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             await deleteCliente(clientToDelete);
                             showCRMFeedback('Cliente eliminado.', 'success');
                             renderCRMClients();
+                            window.dispatchEvent(new CustomEvent('crm-data-updated'));
                         } catch (error) {
                             console.error(error);
                             showCRMFeedback('Error al eliminar.', 'error');

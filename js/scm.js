@@ -496,6 +496,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const result = await onSave(new FormData(event.target));
                     await reload();
+                    if (result?.productId) {
+                        window.dispatchEvent(new CustomEvent('scm-products-updated', { detail: { productId: result.productId } }));
+                        root.classList.add('hidden');
+                        document.body.classList.remove('scm-modal-open');
+                        feedback(result.lowStockProductId ? 'Producto guardado. Revisa su nivel de inventario y reposición.' : 'Producto guardado correctamente.');
+                        return;
+                    }
+                    if (result?.movement) window.dispatchEvent(new CustomEvent('scm-inventory-updated', { detail: result.movement }));
                     const feedbackProductId = result?.movement?.productId || result?.lowStockProductId;
                     if (feedbackProductId) {
                         const product = products.find(item => item.id === feedbackProductId);
@@ -544,8 +552,38 @@ document.addEventListener('DOMContentLoaded', () => {
             const gallery = productGallery(item);
             selectedProductImages = gallery.map(src => ({ src, file: null }));
             const options = categoryOptions().map(category => `<option value="${category}" ${category === selectedCategory ? 'selected' : ''}>${category}</option>`).join('');
-            return `<div class="scm-image-upload"><div class="scm-image-upload-head"><div><strong>Fotos del equipo</strong><span>Las fotos actuales se conservan; puedes añadir o quitar imágenes.</span></div><label for="scmImageFile" class="scm-image-trigger"><i class="bi bi-image"></i> Añadir fotos</label></div><input id="scmImageFile" class="scm-image-input" name="imagen_archivo" type="file" accept="image/*" multiple><div id="scmImageGallery" class="scm-image-grid">${productImageCards() || '<p class="scm-image-empty">Aún no hay fotos seleccionadas.</p>'}</div><span id="scmImageCount" class="scm-image-count">${gallery.length} ${gallery.length === 1 ? 'foto' : 'fotos'}</span></div><label>Nombre<input name="nombre" required value="${item.nombre || ''}"></label><label>Descripción<textarea name="descripcion">${item.descripcion || ''}</textarea></label><label>Categoría<select name="categoria" required>${options}</select></label><label>Otra categoría<input name="nueva_categoria" placeholder="Ej: botas o cocina" value=""></label><label>Stock actual<input name="stock_actual" type="number" min="0" required value="${item.stock_actual ?? 0}"></label><label>Stock mínimo<input name="stock_minimo" type="number" min="0" required value="${item.stock_minimo ?? 0}"></label><label>Proveedor<select name="proveedor_id" required>${suppliers.map(s => `<option value="${s.id}" ${s.id === item.proveedor_id ? 'selected' : ''}>${s.nombre}</option>`).join('')}</select></label><label>Precio de venta<input name="precio_venta" type="number" min="0" step="0.01" required value="${item.precio_venta ?? item.costo_unitario ?? 0}"></label><label>Costo unitario<input name="costo_unitario" type="number" min="0" step="0.01" required value="${item.costo_unitario ?? 0}"></label><label>Estrategia<select name="estrategia_logistica"><option value="PUSH" ${item.estrategia_logistica === 'PUSH' ? 'selected' : ''}>PUSH</option><option value="PULL" ${item.estrategia_logistica === 'PULL' ? 'selected' : ''}>PULL</option></select></label>`; }
-        function editProduct(item) { modal('scmModal', 'Editar equipo', productFields(item), async data => { const product = await readProductForm(data, item); await save('scm_productos', item.id, product); return product.stock_actual <= product.stock_minimo ? { lowStockProductId: item.id } : null; }); }
+            return `<div class="scm-image-upload"><div class="scm-image-upload-head"><div><strong>Fotos del equipo</strong><span>Las fotos actuales se conservan; puedes añadir o quitar imágenes.</span></div><label for="scmImageFile" class="scm-image-trigger"><i class="bi bi-image"></i> Añadir fotos</label></div><input id="scmImageFile" class="scm-image-input" name="imagen_archivo" type="file" accept="image/*" multiple><div id="scmImageGallery" class="scm-image-grid">${productImageCards() || '<p class="scm-image-empty">Aún no hay fotos seleccionadas.</p>'}</div><span id="scmImageCount" class="scm-image-count">${gallery.length} ${gallery.length === 1 ? 'foto' : 'fotos'}</span></div><label>Nombre<input name="nombre" required value="${item.nombre || ''}"></label><label>Descripción<textarea name="descripcion">${item.descripcion || ''}</textarea></label><label>Categoría<select name="categoria" required>${options}</select></label><label>Otra categoría<input name="nueva_categoria" placeholder="Ej: botas o cocina" value=""></label><label>Stock actual<input name="stock_actual" type="number" min="0" required value="${item.stock_actual ?? 0}"></label><label>Stock mínimo<input name="stock_minimo" type="number" min="0" required value="${item.stock_minimo ?? 0}"></label><label>Proveedor<select name="proveedor_id"><option value="">Sin proveedor</option>${suppliers.map(s => `<option value="${s.id}" ${s.id === item.proveedor_id ? 'selected' : ''}>${s.nombre}</option>`).join('')}</select></label><label>Precio de venta<input name="precio_venta" type="number" min="0" step="0.01" required value="${item.precio_venta ?? item.costo_unitario ?? 0}"></label><label>Costo unitario<input name="costo_unitario" type="number" min="0" step="0.01" required value="${item.costo_unitario ?? 0}"></label><label>Estrategia<select name="estrategia_logistica"><option value="PUSH" ${item.estrategia_logistica === 'PUSH' ? 'selected' : ''}>PUSH</option><option value="PULL" ${item.estrategia_logistica === 'PULL' ? 'selected' : ''}>PULL</option></select></label>`; }
+        function openProductForm() {
+            modal('scmModal', 'Nuevo equipo de camping', productFields(), async data => {
+                const product = await readProductForm(data, null);
+                product.created_at = new Date().toISOString();
+                const created = await save('scm_productos', null, product);
+                return { productId: created.id, ...(product.stock_actual <= product.stock_minimo ? { lowStockProductId: created.id } : {}) };
+            });
+        }
+        function editProduct(item) {
+            modal('scmModal', 'Editar equipo', productFields(item), async data => {
+                const product = await readProductForm(data, item);
+                await save('scm_productos', item.id, product);
+                return { productId: item.id, ...(product.stock_actual <= product.stock_minimo ? { lowStockProductId: item.id } : {}) };
+            });
+        }
+        function openDeleteProduct(productId) {
+            const product = products.find(item => item.id === productId);
+            if (!product) throw new Error('El producto ya no está disponible.');
+            pendingDelete = { collection: 'scm_productos', id: product.id, label: product.nombre || 'producto' };
+            $('scmDeleteText').textContent = `¿Deseas eliminar el ${pendingDelete.label}?`;
+            $('scmDeleteModal').classList.remove('hidden');
+        }
+        function openInventoryMovementForm(productId = '') {
+            if (!products.length) throw new Error('Agrega un producto antes de registrar movimientos.');
+            const productOptions = products.map(product => `<option value="${escapeAttribute(product.id)}" ${product.id === productId ? 'selected' : ''}>${escapeAttribute(product.nombre || 'Sin nombre')}</option>`).join('');
+            modal('scmModal', 'Registrar movimiento de inventario', `<label>Producto<select name="producto_id" required>${productOptions}</select></label><label>Tipo<select name="tipo"><option value="entrada">Entrada</option><option value="salida">Salida</option></select></label><label>Cantidad<input name="cantidad" type="number" min="1" step="1" required></label><label>Motivo<select name="motivo"><option value="ajuste">Ajuste</option><option value="reposicion">Reposición</option><option value="venta">Venta</option></select></label>`, async data => {
+                const amount = Number(data.get('cantidad'));
+                if (!Number.isInteger(amount) || amount < 1) throw new Error('La cantidad debe ser un número entero mayor que cero.');
+                return { movement: await recordInventoryMovement(data.get('producto_id'), amount, data.get('tipo'), data.get('motivo')) };
+            });
+        }
         async function reload() {
             products = await read('scm_productos');
             const invalidProducts = products.filter(item => ['hola', 'sd'].includes(String(item.nombre || '').toLowerCase()));
@@ -600,22 +638,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         document.querySelectorAll('.scm-shortcut').forEach(button => button.addEventListener('click', () => document.querySelector(`.nav-link[data-view="${button.dataset.view}"]`)?.click()));
         document.addEventListener('click', async event => { const button = event.target.closest('[data-scm-page]'); if (button) { page[button.dataset.type] += button.dataset.scmPage === 'next' ? 1 : -1; await reload(); return; }
-            if (event.target.closest('#openScmProductModal')) return modal('scmModal', 'Nuevo equipo de camping', productFields(), async data => { const product = await readProductForm(data, null); product.created_at = new Date().toISOString(); const created = await save('scm_productos', null, product); return product.stock_actual <= product.stock_minimo ? { lowStockProductId: created.id } : null; });
+            if (event.target.closest('#openScmProductModal')) return openProductForm();
             const productEdit = event.target.closest('.scm-edit-product, #scmProductDetailEdit'); if (productEdit) { const item = products.find(p => p.id === productEdit.dataset.id); if (item) { $('scmProductDetailModal').classList.add('hidden'); return editProduct(item); } }
             const productDetail = event.target.closest('.scm-view-product'); if (productDetail) { showProductDetail(productDetail.dataset.id); return; }
-            const productDelete = event.target.closest('.scm-delete-product'); if (productDelete) { pendingDelete = { collection: 'scm_productos', id: productDelete.dataset.id, label: products.find(p => p.id === productDelete.dataset.id)?.nombre || 'producto' }; $('scmDeleteText').textContent = `¿Deseas eliminar el ${pendingDelete.label}?`; $('scmDeleteModal').classList.remove('hidden'); }
+            const productDelete = event.target.closest('.scm-delete-product'); if (productDelete) return openDeleteProduct(productDelete.dataset.id);
             if (event.target.closest('#openSupplierModal')) return modal('scmModal', 'Nuevo proveedor', '<label>Nombre<input name="nombre" required></label><label>Contacto<input name="contacto" required></label><label>Correo<input name="correo" type="email" required></label><label>Teléfono<input name="telefono" required></label>', async data => save('scm_proveedores', null, Object.fromEntries(data)));
             const supplierEdit = event.target.closest('.scm-edit-supplier'); if (supplierEdit) { const item = suppliers.find(s => s.id === supplierEdit.dataset.id); return modal('scmModal', 'Editar proveedor', `<label>Nombre<input name="nombre" required value="${item.nombre}"></label><label>Contacto<input name="contacto" required value="${item.contacto}"></label><label>Correo<input name="correo" type="email" required value="${item.correo}"></label><label>Teléfono<input name="telefono" required value="${item.telefono}"></label>`, async data => save('scm_proveedores', item.id, Object.fromEntries(data))); }
             const supplierDelete = event.target.closest('.scm-delete-supplier'); if (supplierDelete) { pendingDelete = { collection: 'scm_proveedores', id: supplierDelete.dataset.id, label: suppliers.find(s => s.id === supplierDelete.dataset.id)?.nombre || 'proveedor' }; $('scmDeleteText').textContent = `¿Deseas eliminar el ${pendingDelete.label}?`; $('scmDeleteModal').classList.remove('hidden'); }
             const historyButton = event.target.closest('.scm-history'); if (historyButton) { renderHistory(historyButton.dataset.id); return; }
-            const movementButton = event.target.closest('#openMovementModal'); if (movementButton) return modal('scmModal', 'Registrar movimiento', `<label>Producto<select name="producto_id">${products.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}</select></label><label>Tipo<select name="tipo"><option>entrada</option><option>salida</option></select></label><label>Cantidad<input name="cantidad" type="number" min="1" required></label><label>Motivo<select name="motivo"><option>venta</option><option>ajuste</option><option>reposicion</option></select></label>`, async data => { const amount = Number(data.get('cantidad')); if (!Number.isInteger(amount) || amount < 1) throw new Error('La cantidad debe ser un número entero mayor que cero.'); return { movement: await recordInventoryMovement(data.get('producto_id'), amount, data.get('tipo'), data.get('motivo')) }; });
+            const movementButton = event.target.closest('#openMovementModal'); if (movementButton) return openInventoryMovementForm();
             if (event.target.closest('#openOrderModal')) return modal('scmModal', 'Generar pedido', `<label>Producto<select name="producto_id">${products.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('')}</select></label><label>Cantidad<input name="cantidad" type="number" min="1" required></label><label>Tipo<select name="tipo"><option>reposicion</option><option>venta</option></select></label>`, async data => save('scm_pedidos', null, { ...Object.fromEntries(data), cantidad: Number(data.get('cantidad')), estado: 'pendiente', fecha: new Date().toISOString() }));
             const supply = event.target.closest('.scm-supply-order'); if (supply) { try { await fulfillSupplyOrder(supply.dataset.id); await reload(); feedback('Pedido surtido e inventario actualizado.'); } catch (error) { feedback(error.message || 'No se pudo surtir el pedido.', 'error'); } return; }
             if (event.target.closest('#saveScmLevel')) { const level = $('scmLevelSelect').value; const config = (await read('scm_config'))[0]; await save('scm_config', config?.id, { nivel_scm: level, actualizado: new Date().toISOString() }); feedback('Nivel SCM actualizado.'); await renderReports(); }
         });
-        document.addEventListener('click', async event => { if (event.target.closest('#scmModalClose, #scmModalCancel') || event.target.matches('#scmModal > .modal-backdrop')) { $('scmModal')?.classList.add('hidden'); document.body.classList.remove('scm-modal-open'); } if (event.target.closest('#scmHistoryClose')) $('scmHistoryModal')?.classList.add('hidden'); if (event.target.closest('#scmProductDetailClose') || event.target.id === 'scmProductDetailModal') $('scmProductDetailModal')?.classList.add('hidden'); if (event.target.closest('#scmDeleteCancel')) { pendingDelete = null; $('scmDeleteModal').classList.add('hidden'); } if (event.target.closest('#scmDeleteAccept') && pendingDelete) { await remove(pendingDelete.collection, pendingDelete.id); $('scmDeleteModal').classList.add('hidden'); feedback('Registro eliminado.'); pendingDelete = null; await reload(); } });
+        document.addEventListener('click', async event => { if (event.target.closest('#scmModalClose, #scmModalCancel') || event.target.matches('#scmModal > .modal-backdrop')) { $('scmModal')?.classList.add('hidden'); document.body.classList.remove('scm-modal-open'); } if (event.target.closest('#scmHistoryClose')) $('scmHistoryModal')?.classList.add('hidden'); if (event.target.closest('#scmProductDetailClose') || event.target.id === 'scmProductDetailModal') $('scmProductDetailModal')?.classList.add('hidden'); if (event.target.closest('#scmDeleteCancel')) { pendingDelete = null; $('scmDeleteModal').classList.add('hidden'); } if (event.target.closest('#scmDeleteAccept') && pendingDelete) { const deletedProduct = pendingDelete.collection === 'scm_productos'; await remove(pendingDelete.collection, pendingDelete.id); $('scmDeleteModal').classList.add('hidden'); feedback('Registro eliminado.'); pendingDelete = null; await reload(); if (deletedProduct) window.dispatchEvent(new CustomEvent('scm-products-updated')); } });
         window.addEventListener('erp-data-updated', () => reload().catch(error => console.error('No se pudo actualizar SCM después de ERP:', error)));
         $('newProductBtn')?.addEventListener('click', () => { document.querySelector('.nav-link[data-view="scm-productos"]')?.click(); setTimeout(() => $('openScmProductModal')?.click(), 50); });
         await seed(); await cleanAndConfigureScm(); await syncCatalogSources(); await reload();
+        window.scmApi = { openProductForm, editProduct: productId => {
+            const product = products.find(item => item.id === productId);
+            if (!product) throw new Error('El producto ya no está disponible.');
+            editProduct(product);
+        }, openDeleteProduct, openInventoryMovementForm };
+        window.dispatchEvent(new CustomEvent('scm-api-ready', { detail: window.scmApi }));
     })().catch(error => { console.error('Error SCM:', error); });
 });

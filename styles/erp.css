@@ -118,6 +118,23 @@
     margin: 0 0 1rem;
 }
 
+.erp-report-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.erp-report-grid > :first-child { grid-column: 1 / -1; }
+.erp-report-bars { display: grid; align-content: center; gap: 0.9rem; min-height: 190px; }
+.erp-report-bar-row { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(70px, 2fr) auto; align-items: center; gap: 0.65rem; color: var(--admin-text); font-size: 0.78rem; }
+.erp-report-bar-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.erp-report-bar-track { height: 10px; overflow: hidden; border-radius: 99px; background: #e8ece8; }
+.erp-report-bar-fill { display: block; height: 100%; border-radius: inherit; background: #4f8a68; }
+.erp-report-bar-fill.critical { background: #d29a3a; }
+.erp-report-bar-fill.empty { background: #c65e50; }
+.erp-report-bar-row strong { min-width: 1.5rem; text-align: right; }
+
 .erp-panel-card { min-width: 0; }
 .erp-panel-card .panel-head { gap: 0.75rem; }
 .erp-panel-card .panel-head h3 { color: var(--admin-text); }
@@ -270,7 +287,9 @@
 .erp-orders-table select:disabled { background: #f1f3f1; color: var(--admin-muted); }
 .erp-status { display: inline-flex; padding: 0.3rem 0.55rem; border-radius: 999px; background: #fff4dd; color: #8a641e; font-size: 0.72rem; font-weight: 800; }
 .erp-status.processed { background: #e8f4eb; color: #2f6f4f; }
+.erp-status.cancelled { background: #fcebea; color: #9c3e36; }
 .erp-action-button { padding: 0.45rem 0.6rem; border: 1px solid var(--admin-border); border-radius: 8px; background: white; color: var(--admin-accent); font-weight: 700; cursor: pointer; }
+.erp-action-danger { color: #9c3e36; }
 .erp-action-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .erp-resource-form { display: grid; grid-template-columns: 1.2fr 0.8fr 1fr auto; align-items: end; gap: 0.7rem; }
@@ -296,6 +315,8 @@
     .erp-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .erp-dashboard-grid,
     .erp-order-layout { grid-template-columns: 1fr; }
+    .erp-report-grid { grid-template-columns: 1fr; }
+    .erp-report-grid > :first-child { grid-column: auto; }
     .erp-resource-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
