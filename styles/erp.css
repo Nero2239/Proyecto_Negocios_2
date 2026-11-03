@@ -1,3 +1,8 @@
+#view-erp {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .erp-heading {
     display: flex;
     align-items: flex-end;
@@ -38,6 +43,7 @@
     display: flex;
     gap: 0.35rem;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     border-bottom: 1px solid var(--admin-border);
     margin-bottom: 1rem;
     scrollbar-width: thin;
@@ -45,6 +51,7 @@
 
 .erp-tab {
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 0.45rem;
     min-height: 42px;
@@ -64,8 +71,22 @@
     color: var(--admin-accent);
 }
 
-.erp-panel { display: none; }
+.erp-panel { display: none; min-width: 0; }
 .erp-panel.active { display: block; }
+
+#view-erp .table-wrap {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+}
+
+#view-erp .filters-card {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#view-erp .filter-group,
+.erp-field {
+    min-width: 0;
+}
 
 .erp-notice {
     margin: 0 0 1rem;
@@ -136,7 +157,7 @@
 .erp-report-bar-row strong { min-width: 1.5rem; text-align: right; }
 
 .erp-panel-card { min-width: 0; }
-.erp-panel-card .panel-head { gap: 0.75rem; }
+.erp-panel-card .panel-head { flex-wrap: wrap; gap: 0.75rem; }
 .erp-panel-card .panel-head h3 { color: var(--admin-text); }
 
 .erp-sales-chart {
@@ -292,7 +313,7 @@
 .erp-action-danger { color: #9c3e36; }
 .erp-action-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
-.erp-resource-form { display: grid; grid-template-columns: 1.2fr 0.8fr 1fr auto; align-items: end; gap: 0.7rem; }
+.erp-resource-form { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1fr) auto; align-items: end; gap: 0.7rem; }
 .erp-resource-form .btn { min-height: 42px; }
 .erp-resource-summary { display: grid; gap: 0.2rem; }
 
@@ -312,6 +333,7 @@
 .erp-checklist i { color: #357a54; }
 
 @media (max-width: 1100px) {
+    #view-erp .filters-card { grid-template-columns: 1fr; }
     .erp-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .erp-dashboard-grid,
     .erp-order-layout { grid-template-columns: 1fr; }
@@ -321,6 +343,7 @@
 }
 
 @media (max-width: 700px) {
+    #view-erp .pagination-row { flex-wrap: wrap; }
     .erp-heading { align-items: flex-start; flex-direction: column; }
     .erp-heading h3 { font-size: 1.25rem; }
     .erp-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

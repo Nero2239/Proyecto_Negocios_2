@@ -16,6 +16,10 @@
     box-sizing: border-box;
 }
 
+html {
+    scrollbar-gutter: stable;
+}
+
 body {
     margin: 0;
     font-family: 'Segoe UI', Roboto, sans-serif;
@@ -33,7 +37,7 @@ textarea {
 .admin-shell {
     min-height: 100vh;
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 280px minmax(0, 1fr);
     background: var(--admin-bg);
 }
 
@@ -115,6 +119,7 @@ textarea {
 }
 
 .content {
+    min-width: 0;
     padding: 1.25rem 1.5rem 2rem;
 }
 
