@@ -85,35 +85,34 @@
                         <p>Gestiona inventario, pedidos y campañas con una experiencia visual pero realista.</p>
                     </div>
                     <div class="hero-badges">
-                        <span><i class="bi bi-fire"></i> 5 pedidos hoy</span>
-                        <span><i class="bi bi-stars"></i> 3 campañas activas</span>
+                        <span id="adminTodayBadge">Cargando pedidos…</span>
                     </div>
                 </div>
 
                 <section class="stats-grid">
                     <article class="stat-card">
                         <p>Productos publicados</p>
-                        <h3>12</h3>
-                        <span>+2 esta semana</span>
+                        <h3 id="adminProductsTotal">—</h3>
+                        <span>Catálogo SCM</span>
                     </article>
                     <article class="stat-card">
                         <p>Pedidos del día</p>
-                        <h3>5</h3>
-                        <span>2 pendientes</span>
+                        <h3 id="adminOrdersToday">—</h3>
+                        <span id="adminOrdersPending">Órdenes ERP</span>
                     </article>
                     <article class="stat-card">
                         <p>Ventas del mes</p>
-                        <h3>$18,240</h3>
-                        <span>+9% frente al mes anterior</span>
+                        <h3 id="adminMonthlySales">—</h3>
+                        <span>Órdenes ERP procesadas</span>
                     </article>
                     <article class="stat-card">
                         <p>Clientes registrados</p>
-                        <h3>184</h3>
-                        <span>+11 esta semana</span>
+                        <h3 id="adminClientsTotal">—</h3>
+                        <span>Clientes CRM</span>
                     </article>
                     <article class="stat-card">
                         <p>Productos agotados</p>
-                        <h3>3</h3>
+                        <h3 id="adminOutOfStock">—</h3>
                         <span>Revisar stock</span>
                     </article>
                 </section>
@@ -134,11 +133,8 @@
                         <div class="panel-head">
                             <h3>Actividad reciente</h3>
                         </div>
-                        <ul class="activity-list">
-                            <li><strong>Pedido #125</strong> recibido y preparado para envío.</li>
-                            <li><strong>Nuevo cliente</strong> registrado desde la web.</li>
-                            <li><strong>Producto actualizado</strong> en la categoría de tiendas.</li>
-                            <li><strong>Promoción activa</strong> para camping de fin de semana.</li>
+                        <ul class="activity-list" id="adminRecentActivity">
+                            <li>Cargando actividad…</li>
                         </ul>
                     </div>
                 </section>

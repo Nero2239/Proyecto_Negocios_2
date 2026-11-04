@@ -328,6 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateAuthUI();
 
+    window.addEventListener('profile-updated', updateAuthUI);
+
     const mainLogoutButton = document.querySelector('a[href="login.html"].btn-secondary');
     mainLogoutButton?.addEventListener('click', function (event) {
         event.preventDefault();

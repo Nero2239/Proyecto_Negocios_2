@@ -6,10 +6,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const role = String(authContext?.role || '').toLowerCase();
         const userEmail = (localStorage.getItem('userEmail') || '').trim().toLowerCase();
         if (!['admin', 'ventas', 'logistica'].includes(role)) return;
-        const [{ initializeApp, getApps, getApp }, { getAuth }, { getFirestore, collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, runTransaction, query, where }] = await Promise.all([
+        const [{ initializeApp, getApps, getApp }, { getAuth }, { getFirestore, collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc, runTransaction, query, where, onSnapshot }, { createRefreshQueue, watchChanges }] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
-            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
+            import('./live-sync.js')
         ]);
         const config = {
             apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
@@ -399,7 +400,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const selectedProduct = $('erpProductSelect').value;
             $('erpProductSelect').innerHTML = `<option value="">Seleccionar producto</option>${state.products.filter(product => Number(product.stock_actual || 0) > 0).map(product => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.nombre)} · ${Number(product.stock_actual || 0)} disponibles · ${money(product.precio_venta ?? product.precio ?? product.costo_unitario)}</option>`).join('')}`;
             if (state.products.some(product => product.id === selectedProduct)) $('erpProductSelect').value = selectedProduct;
+            const selectedOwner = $('erpResourceOwner').value;
             $('erpResourceOwner').innerHTML = `<option value="">Sin asignar</option>${state.users.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.nombre || user.email)}</option>`).join('')}`;
+            if (state.users.some(user => user.id === selectedOwner)) $('erpResourceOwner').value = selectedOwner;
         }
 
         function renderDraft() {
@@ -621,8 +624,8 @@ document.addEventListener('DOMContentLoaded', () => {
             $('erpReportsTable').innerHTML = state.reports.length ? `<table class="erp-orders-table"><thead><tr><th>Fecha</th><th>Orden</th><th>Ventas</th><th>Unidades</th><th>Cliente</th></tr></thead><tbody>${[...state.reports].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).map(report => `<tr><td>${new Date(report.fecha).toLocaleString('es-MX')}</td><td>${escapeHtml(String(report.orden_id || '').slice(0, 7).toUpperCase())}</td><td>${money(report.ventas)}</td><td>${Number(report.unidades_vendidas || 0)}</td><td>${escapeHtml(customerName(report.cliente_id))}</td></tr>`).join('')}</tbody></table>` : '<p class="erp-empty">Los reportes se generan al procesar órdenes.</p>';
         }
 
-        async function reload() {
-            const authUid = localStorage.getItem('userUid') || '';
+        const reload = createRefreshQueue(async () => {
+            const authUid = authContext.uid;
             const usersPromise = canManage ? read('usuarios').then(users => users.filter(user => user.auth_uid === user.id)) : authUid ? getDoc(doc(db, 'usuarios', authUid)).then(snapshot => snapshot.exists() ? [{ id: snapshot.id, ...snapshot.data() }] : []) : Promise.resolve([]);
             const [clients, products, users, movements, orders, processes, resources, reports, maturity] = await Promise.all([
                 read('clientes'), read('scm_productos'), usersPromise, read('scm_movimientos'), erpApi.listOrders(), read('erp_procesos'), erpApi.listResources(), read('erp_reportes'), erpApi.getMaturity()
@@ -648,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProcesses();
             renderResources();
             renderMaturity();
-        }
+        });
 
         function openTab(tabName) {
             document.querySelectorAll('[data-erp-tab]').forEach(tab => tab.classList.toggle('active', tab.dataset.erpTab === tabName));
@@ -868,6 +871,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             await reload();
+            watchChanges({
+                onSnapshot,
+                references: [
+                    ...['clientes', 'scm_productos', 'scm_movimientos', 'erp_ordenes', 'erp_procesos', 'erp_recursos', 'erp_reportes'].map(name => collection(db, name)),
+                    doc(db, 'erp_estado', 'actual'),
+                    canManage ? collection(db, 'usuarios') : doc(db, 'usuarios', authContext.uid)
+                ],
+                refresh: reload,
+                onError: error => {
+                    console.error('Sincronización ERP:', error);
+                    showNotice('No se pudieron sincronizar los datos ERP. Revisa tu conexión y los permisos de la cuenta.', 'error');
+                }
+            });
         } catch (error) {
             console.error('No se pudo iniciar ERP:', error);
             showNotice('No se pudieron cargar los datos ERP. Revisa la conexión con Firestore.', 'error');

@@ -209,10 +209,11 @@
             const sellerDashboard = document.getElementById('sellerDashboard');
             if (adminPanelLink) adminPanelLink.classList.add('hidden');
             try {
-                const [{ initializeApp, getApps, getApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, getDoc }] = await Promise.all([
+                const [{ initializeApp, getApps, getApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, getDoc, onSnapshot }, { watchChanges }] = await Promise.all([
                     import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
                     import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
-                    import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
+                    import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
+                    import('./js/live-sync.js')
                 ]);
                 const config = {
                     apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
@@ -229,33 +230,44 @@
                     const unsubscribe = onAuthStateChanged(auth, currentUser => { unsubscribe(); resolve(currentUser); }, () => resolve(null));
                 });
                 if (!user?.emailVerified) throw new Error('Inicia sesión con un correo verificado para consultar tu perfil.');
-                const profileSnapshot = await getDoc(doc(db, 'usuarios', user.uid));
-                if (!profileSnapshot.exists()) throw new Error('No existe un perfil vinculado a esta cuenta.');
-                const profile = profileSnapshot.data();
-                if (profile.auth_uid !== user.uid || profile.email !== user.email.toLowerCase()) throw new Error('El perfil no coincide con la cuenta autenticada.');
+                const profileRef = doc(db, 'usuarios', user.uid);
+                const refreshProfile = async () => {
+                    const profileSnapshot = await getDoc(profileRef);
+                    if (!profileSnapshot.exists()) throw new Error('No existe un perfil vinculado a esta cuenta.');
+                    const profile = profileSnapshot.data();
+                    if (profile.auth_uid !== user.uid || profile.email !== user.email.toLowerCase()) throw new Error('El perfil no coincide con la cuenta autenticada.');
 
-                const role = String(profile.rol || 'usuario').toLowerCase();
-                const roleLabels = { admin: 'Administrador', ventas: 'Ventas', logistica: 'Logística', usuario: 'Usuario' };
-                localStorage.setItem('userEmail', user.email.toLowerCase());
-                localStorage.setItem('userName', profile.nombre || user.displayName || user.email.split('@')[0]);
-                localStorage.setItem('userUid', user.uid);
-                localStorage.setItem('userRole', role);
-                localStorage.setItem('isLoggedIn', '1');
-                document.getElementById('profileEmail').textContent = user.email;
-                if (profileRole) profileRole.textContent = roleLabels[role] || 'Usuario';
-                sellerDashboard?.classList.remove('hidden');
+                    const role = String(profile.rol || 'usuario').toLowerCase();
+                    const roleLabels = { admin: 'Administrador', ventas: 'Ventas', logistica: 'Logística', usuario: 'Usuario' };
+                    localStorage.setItem('userEmail', user.email.toLowerCase());
+                    localStorage.setItem('userName', profile.nombre || user.displayName || user.email.split('@')[0]);
+                    localStorage.setItem('userUid', user.uid);
+                    localStorage.setItem('userRole', role);
+                    localStorage.setItem('isLoggedIn', '1');
+                    document.getElementById('profileEmail').textContent = user.email;
+                    if (profileRole) profileRole.textContent = roleLabels[role] || 'Usuario';
+                    sellerDashboard?.classList.remove('hidden');
 
-                if (['admin', 'ventas', 'logistica'].includes(role) && adminPanelLink) {
-                    adminPanelLink.classList.remove('hidden');
-                    adminPanelLink.addEventListener('click', async event => {
-                        event.preventDefault();
-                        if (auth.currentUser?.uid !== user.uid || !auth.currentUser.emailVerified) {
-                            adminPanelLink.classList.add('hidden');
-                            return;
-                        }
-                        window.location.replace('admin.html');
-                    });
-                }
+                    adminPanelLink?.classList.toggle('hidden', !['admin', 'ventas', 'logistica'].includes(role));
+                    window.dispatchEvent(new CustomEvent('profile-updated'));
+                };
+                await refreshProfile();
+                adminPanelLink?.addEventListener('click', async event => {
+                    event.preventDefault();
+                    if (auth.currentUser?.uid !== user.uid || !auth.currentUser.emailVerified) {
+                        adminPanelLink.classList.add('hidden');
+                        return;
+                    }
+                    window.location.replace('admin.html');
+                });
+                watchChanges({
+                    onSnapshot, references: [profileRef], refresh: refreshProfile,
+                    onError: error => {
+                        console.error('Sincronización del perfil:', error);
+                        adminPanelLink?.classList.add('hidden');
+                        if (profileRole) profileRole.textContent = 'No se pudo actualizar tu perfil';
+                    }
+                });
             } catch (error) {
                 console.warn('No se pudo cargar el perfil:', error.message);
                 if (profileRole) profileRole.textContent = 'Inicia sesión para consultar tu cuenta';

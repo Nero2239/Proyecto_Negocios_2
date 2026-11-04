@@ -5,7 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const role = String(authContext?.role || '').toLowerCase();
         if (!['admin', 'logistica'].includes(role)) return;
-        const { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, runTransaction } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+        const { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, runTransaction, onSnapshot } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+        const { createRefreshQueue, watchChanges } = await import('./live-sync.js');
         const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
         const config = {
             apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc', authDomain: 'camping-3a6a4.firebaseapp.com',
@@ -228,14 +229,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         async function syncCatalogSources() {
-            const sources = [...campingCatalog, ...communityProducts().filter(item => !['hola', 'sd'].includes(String(item.name || '').toLowerCase()) && isCampingText(`${item.name} ${item.description}`)).map(item => ({
+            const sources = communityProducts().filter(item => !['hola', 'sd'].includes(String(item.name || '').toLowerCase()) && isCampingText(`${item.name} ${item.description}`)).map(item => ({
                 nombre: item.name, descripcion: item.description || '', categoria: 'comunidad', stock_actual: Number(item.stock || 1), stock_minimo: 1,
                 costo_unitario: Number(item.price || 0), precio_venta: Number(item.price || 0), estrategia_logistica: 'PULL', origen: 'comunidad', publicacion_id: String(item.id), publicacion_key: item.publicationKey,
                 imagenes: normalizeImageList(item.images || item.imagenes || item.photos || item.photo), imagen_url: normalizeImageList(item.images || item.imagenes || item.photos || item.photo)[0] || '',
                 created_at: item.created_at || item.createdAt || item.fecha_alta || item.fecha || new Date().toISOString()
-            }))];
+            }));
             for (const source of sources) {
-                const existing = products.find(item => item.nombre === source.nombre && (source.publicacion_id ? item.publicacion_id === source.publicacion_id : !item.publicacion_id));
+                const existing = products.find(item => item.publicacion_id === source.publicacion_id);
                 if (!existing) await save('scm_productos', null, { ...source, origen: source.origen || 'tienda' });
                 else if (source.publicacion_id && source.imagen_url && JSON.stringify(productGallery(existing)) !== JSON.stringify(productGallery(source))) await save('scm_productos', existing.id, { imagenes: source.imagenes, imagen_url: source.imagen_url });
             }
@@ -584,28 +585,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 return { movement: await recordInventoryMovement(data.get('producto_id'), amount, data.get('tipo'), data.get('motivo')) };
             });
         }
+        const refreshViews = createRefreshQueue(async () => {
+            const data = await Promise.all(['scm_productos', 'scm_proveedores', 'scm_movimientos', 'scm_pedidos'].map(read));
+            [products, suppliers, movements, orders] = data;
+            saveSharedCategories([...readSharedCategories(), ...products.map(item => item.categoria)]);
+            syncCommunityPublications();
+            localStorage.setItem('scm_catalog_cache', JSON.stringify(products));
+            renderProducts(); renderInventory(); renderSuppliers(); renderOrders(); await renderReports();
+        });
+
         async function reload() {
-            products = await read('scm_productos');
-            const invalidProducts = products.filter(item => ['hola', 'sd'].includes(String(item.nombre || '').toLowerCase()));
-            for (const item of invalidProducts) await remove('scm_productos', item.id);
-            products = await read('scm_productos');
-            suppliers = await read('scm_proveedores');
-            movements = await read('scm_movimientos');
-            orders = await read('scm_pedidos');
+            await refreshViews();
             let autoRestocksCompleted = false;
             const lowPushProducts = products.filter(product => product.estrategia_logistica === 'PUSH' && Number(product.stock_actual || 0) <= Number(product.stock_minimo || 0));
             for (const product of lowPushProducts) {
                 if (await ensurePushRestockOrder(product.id)) autoRestocksCompleted = true;
             }
-            if (autoRestocksCompleted) {
-                products = await read('scm_productos');
-                movements = await read('scm_movimientos');
-                orders = await read('scm_pedidos');
-            }
-            saveSharedCategories([...readSharedCategories(), ...products.map(item => item.categoria)]);
-            syncCommunityPublications();
-            localStorage.setItem('scm_catalog_cache', JSON.stringify(products));
-            renderProducts(); renderInventory(); renderSuppliers(); renderOrders(); await renderReports();
+            if (autoRestocksCompleted) await refreshViews();
         }
         document.querySelectorAll('.nav-link[data-view^="scm-"]').forEach(link => link.addEventListener('click', () => { setTimeout(() => { const title = { 'scm-dashboard': 'Dashboard SCM', 'scm-productos': 'Productos SCM', 'scm-inventario': 'Inventario', 'scm-proveedores': 'Proveedores', 'scm-pedidos': 'Pedidos SCM', 'scm-reportes': 'Reportes SCM' }[link.dataset.view]; if ($('pageTitle')) $('pageTitle').textContent = title; }, 0); }));
         $('scmProductSearch')?.addEventListener('input', () => { page.products = 1; renderProducts(); }); $('scmStrategyFilter')?.addEventListener('change', () => { page.products = 1; renderProducts(); }); $('scmOriginFilter')?.addEventListener('change', () => { page.products = 1; renderProducts(); });
@@ -654,12 +650,21 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('click', async event => { if (event.target.closest('#scmModalClose, #scmModalCancel') || event.target.matches('#scmModal > .modal-backdrop')) { $('scmModal')?.classList.add('hidden'); document.body.classList.remove('scm-modal-open'); } if (event.target.closest('#scmHistoryClose')) $('scmHistoryModal')?.classList.add('hidden'); if (event.target.closest('#scmProductDetailClose') || event.target.id === 'scmProductDetailModal') $('scmProductDetailModal')?.classList.add('hidden'); if (event.target.closest('#scmDeleteCancel')) { pendingDelete = null; $('scmDeleteModal').classList.add('hidden'); } if (event.target.closest('#scmDeleteAccept') && pendingDelete) { const deletedProduct = pendingDelete.collection === 'scm_productos'; await remove(pendingDelete.collection, pendingDelete.id); $('scmDeleteModal').classList.add('hidden'); feedback('Registro eliminado.'); pendingDelete = null; await reload(); if (deletedProduct) window.dispatchEvent(new CustomEvent('scm-products-updated')); } });
         window.addEventListener('erp-data-updated', () => reload().catch(error => console.error('No se pudo actualizar SCM después de ERP:', error)));
         $('newProductBtn')?.addEventListener('click', () => { document.querySelector('.nav-link[data-view="scm-productos"]')?.click(); setTimeout(() => $('openScmProductModal')?.click(), 50); });
-        await seed(); await cleanAndConfigureScm(); await syncCatalogSources(); await reload();
+        await refreshViews(); await syncCatalogSources(); await reload();
         window.scmApi = { openProductForm, editProduct: productId => {
             const product = products.find(item => item.id === productId);
             if (!product) throw new Error('El producto ya no está disponible.');
             editProduct(product);
         }, openDeleteProduct, openInventoryMovementForm };
         window.dispatchEvent(new CustomEvent('scm-api-ready', { detail: window.scmApi }));
+        watchChanges({
+            onSnapshot,
+            references: ['scm_productos', 'scm_proveedores', 'scm_movimientos', 'scm_pedidos'].map(name => collection(db, name)),
+            refresh: refreshViews,
+            onError: error => {
+                console.error('Sincronización SCM:', error);
+                feedback('No se pudo sincronizar SCM. Revisa tu conexión y los permisos de la cuenta.', 'error');
+            }
+        });
     })().catch(error => { console.error('Error SCM:', error); });
 });

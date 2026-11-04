@@ -91,7 +91,7 @@ async function loadScmCatalog() {
     try {
         let scmProducts = [];
         try {
-            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+            const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
             const { getFirestore, collection, getDocs } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
             const firebaseConfig = {
                 apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
@@ -101,7 +101,7 @@ async function loadScmCatalog() {
                 messagingSenderId: '181839243079',
                 appId: '1:181839243079:web:df39441f32098fc7ca4e62'
             };
-            const app = initializeApp(firebaseConfig);
+            const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
             const snapshot = await getDocs(collection(getFirestore(app), 'scm_productos'));
             scmProducts = snapshot.docs.map(productDoc => ({ id: productDoc.id, ...productDoc.data() }));
             localStorage.setItem('scm_catalog_cache', JSON.stringify(scmProducts));
@@ -139,14 +139,10 @@ async function loadScmCatalog() {
                 communityListing: true
             });
         }
-        if (!sourceProducts.length) {
-            renderShopCategoryOptions();
-            return;
-        }
         productos = sourceProducts.map(item => ({
             id: item.id,
             nombre: item.nombre,
-            precio: Number(item.costo_unitario || 0),
+            precio: Number(item.precio_venta ?? item.precio ?? item.costo_unitario ?? 0),
             descripcion: item.descripcion || '',
             detalle: item.descripcion || '',
             categoria: String(item.categoria || 'accesorios').trim().toLowerCase(),
@@ -737,6 +733,29 @@ async function initShop() {
     await loadScmCatalog();
     renderProducts();
     renderCart();
+
+    try {
+        const [{ getApp }, { getFirestore, collection, onSnapshot }, { watchChanges }] = await Promise.all([
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
+            import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
+            import('./live-sync.js')
+        ]);
+        const db = getFirestore(getApp());
+        watchChanges({
+            onSnapshot, references: [collection(db, 'scm_productos')],
+            refresh: async () => {
+                await loadScmCatalog();
+                renderProducts();
+                if (state.selectedProductId) {
+                    if (productos.some(product => String(product.id) === String(state.selectedProductId))) showProductDetail(state.selectedProductId);
+                    else closeProductModal();
+                }
+            },
+            onError: error => console.error('Sincronización del catálogo:', error)
+        });
+    } catch (error) {
+        console.warn('No se pudo activar la sincronización del catálogo:', error);
+    }
 
     const shouldOpenCart = new URLSearchParams(window.location.search).get('openCart') === '1';
     if (shouldOpenCart) {

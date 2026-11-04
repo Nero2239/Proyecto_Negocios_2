@@ -1,10 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
     (async function initCRM() {
+        const authContext = window.adminAuthContext || await new Promise(resolve => {
+            window.addEventListener('admin-auth-ready', event => resolve(event.detail), { once: true });
+        });
+        if (!['admin', 'ventas'].includes(authContext?.role)) return;
         // --- 1. Firebase Setup (Dynamic Imports) ---
         let app, db;
         try {
             const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
-            const { getFirestore, collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+            const { getFirestore, collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, onSnapshot } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
+            const { createRefreshQueue, watchChanges } = await import('./live-sync.js');
 
             const firebaseConfig = {
                 apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',
@@ -341,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             async function renderUsers() {
-                if (!usersTableBody) return;
+                if (!usersTableBody || authContext.role !== 'admin') return;
                 try {
                     currentUsers = await getUsuarios();
                     const totalPages = Math.max(1, Math.ceil(currentUsers.length / crmItemsPerPage));
@@ -439,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
             async function loadInteraccionesView() {
                 if (!interClientSelect) return;
                 try {
+                    const selectedClient = interClientSelect.value;
                     const clientes = await getClientes();
                     interClientSelect.innerHTML = '<option value="">Seleccione un cliente...</option>';
                     clientes.forEach(c => {
@@ -447,8 +453,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         opt.textContent = c.nombre;
                         interClientSelect.appendChild(opt);
                     });
-                    if (interTimeline) interTimeline.innerHTML = '<p class="text-muted">Seleccione un cliente para ver sus interacciones.</p>';
-                    if (interClientInfo) interClientInfo.innerHTML = '';
+                    if (clientes.some(client => client.id === selectedClient)) {
+                        interClientSelect.value = selectedClient;
+                        await renderInteracciones(selectedClient);
+                    } else {
+                        if (interTimeline) interTimeline.innerHTML = '<p class="text-muted">Seleccione un cliente para ver sus interacciones.</p>';
+                        if (interClientInfo) interClientInfo.innerHTML = '';
+                    }
                 } catch (error) {
                     console.error(error);
                 }
@@ -712,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             window.crmApi = {
                 openCreateClient() {
-                    if (!['admin', 'ventas'].includes(String(localStorage.getItem('userRole') || '').toLowerCase())) throw new Error('Tu rol no puede administrar clientes CRM.');
+                    if (!['admin', 'ventas'].includes(authContext.role)) throw new Error('Tu rol no puede administrar clientes CRM.');
                     editingClientId = null;
                     crmClientForm?.reset();
                     if (crmClientFormTitle) crmClientFormTitle.textContent = 'Nuevo cliente CRM';
@@ -720,13 +731,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     openModal(crmClientModal);
                 },
                 async editClient(clientId) {
-                    if (!['admin', 'ventas'].includes(String(localStorage.getItem('userRole') || '').toLowerCase())) throw new Error('Tu rol no puede administrar clientes CRM.');
+                    if (!['admin', 'ventas'].includes(authContext.role)) throw new Error('Tu rol no puede administrar clientes CRM.');
                     const client = await getClienteById(clientId);
                     if (!client) throw new Error('El cliente ya no existe.');
                     openClientEditor(client);
                 },
                 async deleteClient(clientId) {
-                    if (String(localStorage.getItem('userRole') || '').toLowerCase() !== 'admin') throw new Error('Solo administración puede eliminar clientes CRM.');
+                    if (authContext.role !== 'admin') throw new Error('Solo administración puede eliminar clientes CRM.');
                     const client = await getClienteById(clientId);
                     if (!client) throw new Error('El cliente ya no existe.');
                     clientToDelete = clientId;
@@ -1005,8 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // --- 8. Observer para cambios de vista ---
-            const contentContainer = document.querySelector('.content') || document.body;
-            const observer = new MutationObserver(() => {
+            const refreshActiveView = createRefreshQueue(async () => {
                 const crmView = document.getElementById('view-crm');
                 const interView = document.getElementById('view-interacciones');
                 const dashView = document.getElementById('view-dashboard-crm');
@@ -1014,28 +1024,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 const usersView = document.getElementById('view-usuarios');
                 
                 if (crmView && crmView.classList.contains('active')) {
-                    renderCRMClients();
+                    await renderCRMClients();
                 }
                 if (interView && interView.classList.contains('active')) {
-                    loadInteraccionesView();
+                    await loadInteraccionesView();
                 }
                 if (dashView && dashView.classList.contains('active')) {
-                    renderDashboardCRM();
+                    await renderDashboardCRM();
                 }
                 if (actView && actView.classList.contains('active')) {
-                    renderMiActividad();
+                    await renderMiActividad();
                 }
                 if (usersView && usersView.classList.contains('active')) {
-                    renderUsers();
+                    await renderUsers();
                 }
             });
-            observer.observe(contentContainer, { subtree: true, attributes: true, attributeFilter: ['class'] });
+            const observer = new MutationObserver(() => refreshActiveView().catch(error => console.error('Actualización CRM:', error)));
+            ['crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'usuarios'].forEach(view => {
+                const section = document.getElementById(`view-${view}`);
+                if (section) observer.observe(section, { attributes: true, attributeFilter: ['class'] });
+            });
 
             // --- 9. Inicialización ---
-            // Check initial active view
-            if (document.getElementById('view-crm')?.classList.contains('active')) {
-                renderCRMClients();
-            }
+            await refreshActiveView();
+            const references = ['clientes', 'interacciones'].map(name => collection(db, name));
+            if (authContext.role === 'admin') references.push(collection(db, 'usuarios'));
+            watchChanges({
+                onSnapshot, references, refresh: refreshActiveView,
+                onError: error => {
+                    console.error('Sincronización CRM:', error);
+                    showCRMFeedback('No se pudo sincronizar CRM. Revisa tu conexión y los permisos de la cuenta.', 'error');
+                }
+            });
 
         } catch (error) {
             console.error('Error inicializando CRM:', error);

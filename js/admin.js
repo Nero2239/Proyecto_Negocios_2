@@ -9,8 +9,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     let firebaseUser;
     let userProfile;
+    let watchProfile;
+    let dashboardSync;
+    let readDashboard;
     try {
-        const [{ initializeApp, getApps, getApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, getDoc }] = await Promise.all([
+        const [{ initializeApp, getApps, getApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, collection, getDoc, getDocs, onSnapshot }] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
@@ -25,6 +28,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const profileSnapshot = await getDoc(doc(db, 'usuarios', firebaseUser.uid));
         if (!profileSnapshot.exists()) throw new Error('No existe un perfil de acceso para esta cuenta.');
         userProfile = profileSnapshot.data();
+        watchProfile = (next, error) => onSnapshot(doc(db, 'usuarios', firebaseUser.uid), next, error);
+        const references = ['scm_productos', 'clientes', 'erp_ordenes'].map(name => collection(db, name));
+        dashboardSync = { onSnapshot, references };
+        readDashboard = async () => (await Promise.all(references.map(reference => getDocs(reference))))
+            .map(snapshot => snapshot.docs.map(record => ({ ...record.data(), id: record.id })));
     } catch (error) {
         console.warn('Acceso al panel denegado:', error.message);
         window.location.href = 'login.html';
@@ -258,13 +266,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function setView(viewName) {
+        // Use the same persisted records and editors as ERP instead of the old demo views.
+        const aliases = { productos: 'scm-productos', clientes: 'crm', pedidos: 'erp', reportes: 'erp' };
+        const requestedView = viewName;
+        viewName = aliases[viewName] || viewName;
         if (roleViews && !roleViews.has(viewName)) viewName = 'erp';
+        const activeNavView = [...navLinks].some(link => link.dataset.view === requestedView) ? requestedView : viewName;
         viewSections.forEach(section => {
             section.classList.toggle('active', section.id === `view-${viewName}`);
         });
 
         navLinks.forEach(link => {
-            link.classList.toggle('active', link.dataset.view === viewName);
+            link.classList.toggle('active', link.dataset.view === activeNavView);
         });
 
         const titles = {
@@ -292,6 +305,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             pageTitle.textContent = titles[viewName] || 'Inicio';
         }
         localStorage.setItem('adminView', viewName);
+        if (requestedView === 'pedidos') document.querySelector('[data-erp-tab="orders"]')?.click();
+        if (requestedView === 'reportes') document.querySelector('[data-erp-tab="reports"]')?.click();
     }
 
     function showFeedback(text, type = 'success') {
@@ -952,7 +967,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (viewName) {
                 setView(viewName);
                 if (viewName === 'productos') {
-                    resetProductForm();
+                    window.scmApi?.openProductForm();
                 }
             }
         });
@@ -992,6 +1007,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderPromotions();
     renderClients();
     renderOrders();
+
+    const stopProfileSync = watchProfile(snapshot => {
+        if (!snapshot.exists() || snapshot.data().auth_uid !== firebaseUser.uid) {
+            window.location.replace('login.html');
+            return;
+        }
+        const profile = snapshot.data();
+        const nextRole = String(profile.rol || 'usuario').toLowerCase();
+        const nextName = profile.nombre || firebaseUser.displayName || userEmail.split('@')[0];
+        localStorage.setItem('userRole', nextRole);
+        localStorage.setItem('userName', nextName);
+        if (adminNameLabel) adminNameLabel.textContent = `${nextName} · ${roleLabels[nextRole] || 'Usuario'}`;
+        if (nextRole !== userRole) {
+            window.location.replace(['admin', 'ventas', 'logistica'].includes(nextRole) ? 'admin.html' : 'profile.html');
+        }
+    }, error => {
+        console.error('Sincronización del perfil:', error);
+        showFeedback('No se pudo actualizar el perfil de acceso.', 'error');
+    });
+    window.addEventListener('pagehide', () => stopProfileSync(), { once: true });
+    window.addEventListener('pageshow', event => {
+        if (event.persisted) window.location.reload();
+    });
+
+    const { watchChanges } = await import('./live-sync.js');
+    watchChanges({
+        ...dashboardSync,
+        refresh: async () => {
+            const [catalog, customers, companyOrders] = await readDashboard();
+            const now = new Date();
+            const todayOrders = companyOrders.filter(order => new Date(order.fecha).toDateString() === now.toDateString());
+            const pending = companyOrders.filter(order => order.estado === 'pendiente').length;
+            const monthlySales = companyOrders.filter(order => {
+                const date = new Date(order.fecha_procesamiento || order.fecha);
+                return order.estado === 'procesada' && date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+            }).reduce((sum, order) => sum + Number(order.total || 0), 0);
+            const values = {
+                adminProductsTotal: catalog.length,
+                adminOrdersToday: todayOrders.length,
+                adminOrdersPending: `${pending} pendientes`,
+                adminMonthlySales: monthlySales.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }),
+                adminClientsTotal: customers.length,
+                adminOutOfStock: catalog.filter(product => Number(product.stock_actual || 0) <= 0).length,
+                adminTodayBadge: `${todayOrders.length} pedidos hoy`
+            };
+            Object.entries(values).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = value;
+            });
+            const activity = document.getElementById('adminRecentActivity');
+            if (activity) {
+                const recent = [...companyOrders].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 4);
+                activity.innerHTML = recent.length ? recent.map(order => `<li><strong>Orden ${escapeHtml(order.id.slice(0, 7).toUpperCase())}</strong> · ${escapeHtml(order.estado || 'pendiente')} · ${escapeHtml(customers.find(client => client.id === order.cliente_id)?.nombre || 'Cliente CRM')}</li>`).join('') : '<li>Aún no hay órdenes registradas.</li>';
+            }
+        },
+        onError: error => {
+            console.error('Sincronización del panel:', error);
+            showFeedback('No se pudo sincronizar el resumen del panel.', 'error');
+        }
+    });
 
     window.addEventListener('resize', () => {
         if (window.innerWidth > 780) {
