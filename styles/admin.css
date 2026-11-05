@@ -41,6 +41,15 @@ textarea {
     background: var(--admin-bg);
 }
 
+.admin-shell[hidden] {
+    display: none;
+}
+
+#adminAccessStatus {
+    margin: 2rem;
+    color: var(--admin-muted);
+}
+
 .sidebar {
     background: linear-gradient(180deg, #17223b 0%, #1c2e49 100%);
     color: white;

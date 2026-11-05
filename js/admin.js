@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let watchProfile;
     let dashboardSync;
     let readDashboard;
+    let access;
     try {
         const [{ initializeApp, getApps, getApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, collection, getDoc, getDocs, onSnapshot }] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
@@ -28,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const profileSnapshot = await getDoc(doc(db, 'usuarios', firebaseUser.uid));
         if (!profileSnapshot.exists()) throw new Error('No existe un perfil de acceso para esta cuenta.');
         userProfile = profileSnapshot.data();
+        access = window.RutaSalvajeAccess;
         watchProfile = (next, error) => onSnapshot(doc(db, 'usuarios', firebaseUser.uid), next, error);
         const references = ['scm_productos', 'clientes', 'erp_ordenes'].map(name => collection(db, name));
         dashboardSync = { onSnapshot, references };
@@ -40,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const userEmail = String(firebaseUser.email || '').toLowerCase();
-    const userRole = String(userProfile.rol || '').toLowerCase();
+    const userRole = access.normalizeRole(userProfile.rol);
     if (!['admin', 'ventas', 'logistica'].includes(userRole) || userProfile.auth_uid !== firebaseUser.uid) {
         window.location.href = 'profile.html';
         return;
@@ -52,11 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('isLoggedIn', '1');
     window.adminAuthContext = { uid: firebaseUser.uid, role: userRole };
     window.dispatchEvent(new CustomEvent('admin-auth-ready', { detail: window.adminAuthContext }));
-    const allowedViewsByRole = {
-        ventas: new Set(['dashboard', 'crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'erp']),
-        logistica: new Set(['dashboard', 'scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes', 'erp'])
-    };
-    const roleViews = allowedViewsByRole[userRole];
+    const roleViews = access.allowedViews(userRole);
     const roleGroupViews = {
         crm: ['crm', 'interacciones', 'dashboard-crm', 'mi-actividad'],
         scm: ['scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes'],
@@ -66,7 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sidebar = document.getElementById('adminSidebar');
     const sidebarToggle = document.getElementById('sidebarToggle');
     const mobileSidebarToggle = document.getElementById('mobileSidebarToggle');
-    const navLinks = document.querySelectorAll('.nav-link');
+    const navLinks = document.querySelectorAll('.nav-link[data-view]');
     const viewSections = document.querySelectorAll('.view-section');
     const pageTitle = document.getElementById('pageTitle');
     const goStoreBtn = document.getElementById('goStoreBtn');
@@ -85,6 +83,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         element.classList.toggle('hidden', Boolean(roleViews && !views.some(view => roleViews.has(view))));
     });
     newProductBtn?.classList.toggle('hidden', userRole !== 'admin');
+    document.querySelector('.admin-shell').hidden = false;
+    document.getElementById('adminAccessStatus')?.remove();
 
     const productSearch = document.getElementById('productSearch');
     const categoryFilter = document.getElementById('categoryFilter');
@@ -999,8 +999,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelector('.nav-link[data-view="productos"]').click();
     });
 
-    const savedView = localStorage.getItem('adminView') || 'dashboard';
-    const defaultView = roleViews && !roleViews.has(savedView) ? 'erp' : savedView;
+    const requestedView = new URLSearchParams(window.location.search).get('view');
+    const savedView = requestedView || localStorage.getItem('adminView') || access.roleHome(userRole);
+    const defaultView = roleViews.has(savedView) ? savedView : access.roleHome(userRole);
     renderCategoryOptions();
     setView(defaultView);
     renderProducts();
@@ -1031,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (event.persisted) window.location.reload();
     });
 
-    const { watchChanges } = await import('./live-sync.js');
+    const { watchChanges } = window.RutaSalvajeLiveSync;
     watchChanges({
         ...dashboardSync,
         refresh: async () => {

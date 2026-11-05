@@ -1,4 +1,29 @@
 /* ==================== PANEL C2C EN PERFIL ==================== */
+[hidden] {
+    display: none !important;
+}
+
+body.purchase-detail-open {
+    overflow: hidden;
+}
+
+.profile-business-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.profile-business-links .btn {
+    white-space: normal;
+    text-align: center;
+}
+
+.profile-detail-card,
+.purchase-card-main {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .profile-dashboard {
     display: grid;
     gap: 1.25rem;
@@ -70,7 +95,7 @@
 .profile-summary-grid {
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
 }
 
 .profile-detail-card {
@@ -533,6 +558,19 @@
 }
 
 @media (max-width: 768px) {
+    .purchase-card {
+        grid-template-columns: 1fr;
+    }
+
+    .purchase-card-heading,
+    .purchase-card-meta {
+        flex-wrap: wrap;
+    }
+
+    .profile-business-links .btn {
+        width: 100%;
+    }
+
     .profile-hero-card,
     .profile-section-header,
     .c2c-dashboard-header {

@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const role = String(authContext?.role || '').toLowerCase();
         if (!['admin', 'logistica'].includes(role)) return;
         const { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, runTransaction, onSnapshot } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
-        const { createRefreshQueue, watchChanges } = await import('./live-sync.js');
+        const { createRefreshQueue, watchChanges } = window.RutaSalvajeLiveSync;
         const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
         const config = {
             apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc', authDomain: 'camping-3a6a4.firebaseapp.com',

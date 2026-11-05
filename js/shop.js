@@ -738,7 +738,7 @@ async function initShop() {
         const [{ getApp }, { getFirestore, collection, onSnapshot }, { watchChanges }] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
-            import('./live-sync.js')
+            window.RutaSalvajeLiveSync
         ]);
         const db = getFirestore(getApp());
         watchChanges({

@@ -137,8 +137,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     await authSdk.signOut(auth);
                     throw new Error('El perfil Firestore no coincide con la cuenta autenticada. Solicita su migración por UID.');
                 }
-                const normalizedRole = ['admin', 'ventas', 'logistica'].includes(String(profile.rol || '').toLowerCase()) ? profile.rol.toLowerCase() : 'user';
-                await firestoreSdk.updateDoc(profileRef, { ultimo_acceso: new Date().toISOString() });
+                const { normalizeRole, roleHome } = window.RutaSalvajeAccess;
+                const normalizedRole = normalizeRole(profile.rol);
+                try {
+                    await firestoreSdk.updateDoc(profileRef, { ultimo_acceso: new Date().toISOString() });
+                } catch (error) {
+                    // Updating this informational field must not block a verified staff session.
+                    console.warn('No se pudo registrar el último acceso:', error);
+                }
                 const clientQuery = firestoreSdk.query(firestoreSdk.collection(db, 'clientes'), firestoreSdk.where('correo', '==', user.email.toLowerCase()));
                 const clientSnapshot = await firestoreSdk.getDocs(clientQuery);
                 if (clientSnapshot.empty) {
@@ -163,7 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const opensBusinessPanel = ['admin', 'ventas', 'logistica'].includes(normalizedRole);
                 showMessage(opensBusinessPanel ? 'Acceso verificado. Abriendo el panel empresarial…' : 'Acceso verificado. Abriendo tu perfil…');
-                setTimeout(() => { window.location.href = opensBusinessPanel ? 'admin.html' : 'profile.html'; }, 500);
+                setTimeout(() => { window.location.href = opensBusinessPanel ? `admin.html?view=${encodeURIComponent(roleHome(normalizedRole))}` : 'profile.html'; }, 500);
             } catch (error) {
                 console.error('No se pudo iniciar sesión:', error);
                 const messages = {
@@ -322,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (profileEmail) {
-            profileEmail.textContent = isLoggedIn && userEmail ? userEmail : 'paramore@ruta.com';
+            profileEmail.textContent = isLoggedIn && userEmail ? userEmail : 'Sin sesión';
         }
     }
 

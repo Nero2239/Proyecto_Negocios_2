@@ -26,7 +26,7 @@ function showToast(message, type = 'success') {
 }
 // Helper para obtener la clave de almacenamiento específica del usuario
 function getPublicationsStorageKey() {
-    const userEmail = localStorage.getItem('userEmail');
+    const userEmail = document.getElementById('profileBusinessAccess') ? window.profileContext?.email : localStorage.getItem('userEmail');
     return userEmail ? `userPublications_${userEmail}` : null;
 }
 
@@ -130,7 +130,13 @@ function renderMyPublications() {
         return;
     }
 
-    const publications = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    let publications = [];
+    try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        if (Array.isArray(saved)) publications = saved;
+    } catch (error) {
+        console.warn('No se pudieron leer las publicaciones guardadas:', error);
+    }
 
     if (publications.length === 0) {
         myPublicationsList.innerHTML = `<p class="text-center text-gray-500">Aún no has publicado ningún producto.</p>`;
@@ -140,7 +146,7 @@ function renderMyPublications() {
                 <img src="${product.photo}" alt="${product.name}" class="publication-photo">
                 <div class="publication-body">
                     <h4 class="publication-title">${product.name}</h4>
-                    <p class="publication-price">$${product.price.toFixed(2)}</p>
+                    <p class="publication-price">$${Number(product.price || 0).toFixed(2)}</p>
                     <p class="publication-description">${product.description}</p>
                 </div>
                 <div class="publication-actions">
@@ -340,6 +346,11 @@ document.addEventListener('DOMContentLoaded', () => {
         initMyPublicationsPage(); // Carga las publicaciones iniciales
         initProfileComments(); // Configura el formulario de comentarios del perfil
     }
+});
+
+window.addEventListener('profile-updated', renderMyPublications);
+window.addEventListener('storage', event => {
+    if (event.key === null || event.key === getPublicationsStorageKey()) renderMyPublications();
 });
 
 // Exponer funciones al objeto window para poder llamarlas desde el HTML (onclick)

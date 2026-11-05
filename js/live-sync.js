@@ -1,5 +1,6 @@
+(() => {
 // Serialize refreshes so an older request cannot overwrite a more recent change.
-export function createRefreshQueue(refresh) {
+function createRefreshQueue(refresh) {
     let task = null;
     let pending = false;
     return function requestRefresh() {
@@ -17,7 +18,7 @@ export function createRefreshQueue(refresh) {
 }
 
 // Firestore delivers changes from this page, other tabs and other signed-in devices.
-export function watchChanges({ onSnapshot, references, refresh, onError, delay = 80 }) {
+function watchChanges({ onSnapshot, references, refresh, onError, delay = 80 }) {
     const requestRefresh = createRefreshQueue(refresh);
     const reportError = onError || (error => console.error('Error de sincronización:', error));
     let subscriptions = [];
@@ -58,3 +59,7 @@ export function watchChanges({ onSnapshot, references, refresh, onError, delay =
         globalThis.removeEventListener?.('pageshow', resume);
     };
 }
+
+
+globalThis.RutaSalvajeLiveSync = Object.freeze({ createRefreshQueue, watchChanges });
+})();

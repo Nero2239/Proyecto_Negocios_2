@@ -43,7 +43,11 @@ Este proyecto no contiene una API REST ni Firebase Functions: las operaciones tr
 
 Los perfiles legacy con IDs aleatorios no reciben privilegios automáticamente. El administrador debe crear/migrar su perfil UID antes de habilitar las reglas; de lo contrario el acceso al panel queda denegado.
 
-El perfil de cliente no muestra historial de compras mientras no existan pedidos reales asociados a cada usuario.
+El perfil recupera las compras que el checkout guarda para el correo de cada usuario en este navegador, con el detalle y ticket de cada pedido, además de sus publicaciones, comentarios y subastas. No agrega compras de ejemplo. Si falla la lectura de permisos, el contenido personal de la sesión verificada sigue disponible y los accesos empresariales permanecen ocultos.
+
+Los accesos del perfil se calculan con `js/access.js`: administración puede abrir todos los módulos, ventas accede a CRM y ERP, y logística a SCM y ERP. Los roles `usuario`, desconocidos o sin asignar no reciben accesos empresariales. Los enlaces abren `admin.html?view=...`; el panel vuelve a comprobar el rol autenticado y rechaza destinos no permitidos. Desde el panel se puede volver a **Mi perfil**. Las pruebas locales se ejecutan con `node --test tests/access.test.mjs tests/live-sync.test.mjs`.
+
+`js/access.js` y `js/live-sync.js` se cargan como scripts clásicos antes de las pantallas que los utilizan. Esto permite abrir los HTML con `file:///` sin importar módulos locales mediante `import()`. La prueba `node tests/cross-origin-login.cjs` verifica el inicio de sesión desde un archivo local y con scripts de otro origen usando Firebase simulado; requiere Chrome o la variable `CHROME_BIN` con la ruta de un navegador Chromium.
 
 ---
 

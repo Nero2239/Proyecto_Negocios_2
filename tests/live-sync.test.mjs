@@ -1,9 +1,11 @@
+import { runInThisContext } from 'node:vm';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const source = await readFile(new URL('../js/live-sync.js', import.meta.url), 'utf8');
-const { createRefreshQueue, watchChanges } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+runInThisContext(source);
+const { createRefreshQueue, watchChanges } = globalThis.RutaSalvajeLiveSync;
 const tick = () => new Promise(resolve => setTimeout(resolve, 15));
 
 function mockFirestore() {

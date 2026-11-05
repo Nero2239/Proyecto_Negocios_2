@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
-            import('./live-sync.js')
+            window.RutaSalvajeLiveSync
         ]);
         const config = {
             apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',

@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
             const { getFirestore, collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, where, orderBy, Timestamp, onSnapshot } = await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js');
-            const { createRefreshQueue, watchChanges } = await import('./live-sync.js');
+            const { createRefreshQueue, watchChanges } = window.RutaSalvajeLiveSync;
 
             const firebaseConfig = {
                 apiKey: 'AIzaSyAZCztGChAZ9k81WWBkp9TZBx9XphWqcmc',

@@ -13,7 +13,8 @@
     <link rel="stylesheet" href="styles/erp.css" />
 </head>
 <body>
-    <div class="admin-shell">
+    <p id="adminAccessStatus" role="status">Verificando permisos de la cuenta…</p>
+    <div class="admin-shell" hidden>
         <aside class="sidebar" id="adminSidebar">
             <div class="sidebar-brand">
                 <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Plegar menú">
@@ -53,6 +54,7 @@
             </nav>
 
             <div class="sidebar-footer">
+                <a href="profile.html" class="nav-link"><i class="bi bi-person-circle"></i><span>Mi perfil</span></a>
                 <p>Sesión activa</p>
                 <strong id="adminNameLabel">Administrador</strong>
             </div>
@@ -922,7 +924,9 @@
     <div id="scmHistoryModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scmHistoryTitle"><div class="modal-backdrop"></div><div class="modal-content max-w-2xl"><button id="scmHistoryClose" class="modal-close" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><div class="modal-icon"><i class="bi bi-clock-history"></i></div><h3 id="scmHistoryTitle">Historial de movimientos</h3><div id="scmHistoryList"></div></div></div></div>
     <div id="scmProductDetailModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scmProductDetailTitle"><div class="modal-backdrop"></div><div class="modal-content max-w-2xl"><button id="scmProductDetailClose" class="modal-close" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><img id="scmProductDetailImage" class="scm-detail-image hidden" alt="Equipo de camping"><div id="scmProductDetailOrigin" class="source-badge"></div><h3 id="scmProductDetailTitle"></h3><p id="scmProductDetailDescription" class="modal-description"></p><div id="scmProductDetailMeta" class="scm-detail-meta"></div><button id="scmProductDetailEdit" class="btn btn-primary" type="button"><i class="bi bi-pencil"></i> Editar equipo</button></div></div></div>
 
-    <script src="js/admin.js"></script>
+    <script src="js/access.js"></script>
+<script src="js/live-sync.js"></script>
+<script src="js/admin.js"></script>
     <script src="js/crm.js"></script>
     <script src="js/scm.js"></script>
     <script src="js/erp.js"></script>
