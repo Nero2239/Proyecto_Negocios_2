@@ -57,7 +57,8 @@
                 <!-- Formulario -->
                 <div class="contact-form">
                     <h3 class="text-3xl font-serif text-[#2C302E] mb-6">Envíanos tu Mensaje</h3>
-                    <form id="contactForm">
+                    <p id="commerceNotice" role="status" aria-live="polite">Inicia sesión para crear y dar seguimiento a tu ticket.</p>
+<form id="contactForm">
                         <div id="formMessage"></div>
 
                         <div class="form-group">
@@ -71,7 +72,8 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="mensaje" class="form-label">Mensaje</label>
+                            <label>Asunto<input name="subject" class="form-input" required maxlength="120"></label>
+<label for="mensaje" class="form-label">Mensaje</label>
                             <textarea id="mensaje" name="mensaje" class="form-textarea" placeholder="Cuéntanos cómo podemos ayudarte..."></textarea>
                         </div>
 
@@ -139,25 +141,6 @@
     <script>
         // FORMULARIO DE CONTACTO: Manejador del envío
         document.addEventListener('DOMContentLoaded', () => {
-            const contactForm = document.getElementById('contactForm');
-            if (contactForm) {
-                contactForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-
-                    const nombre = document.getElementById('nombre').value.trim();
-                    const correo = document.getElementById('correo').value.trim();
-                    const mensaje = document.getElementById('mensaje').value.trim();
-
-                    if (!nombre || !correo || !mensaje) {
-                        showToast('Por favor, completa todos los campos.', 'error');
-                        return;
-                    }
-
-                    showToast(`Gracias ${nombre}, tu mensaje ha sido enviado.`, 'success');
-                    contactForm.reset();
-                });
-            }
-
             const newsletterForm = document.getElementById('newsletterForm');
             if(newsletterForm) {
                 newsletterForm.addEventListener('submit', (e) => {
@@ -213,6 +196,8 @@
 </div>
 
 <script src="js/access.js"></script>
+<script src="js/commerce-client.js"></script>
+<script src="js/commerce-ui.js"></script>
 <script src="js/live-sync.js"></script>
 <script src="js/shop.js"></script>
 <script src="js/auth.js"></script>

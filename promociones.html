@@ -56,49 +56,7 @@
     <main>
         <section id="cambio" class="py-24 px-6 max-w-6xl mx-auto grid gap-12 lg:grid-cols-[1.5fr_1fr] items-start">
             <div class="bg-white p-10 rounded-xl shadow-xl border border-stone-200 relative">
-                <div style="position:absolute;right:18px;top:18px;">
-                    <span class="discount-small">Código: RUTA10</span>
-                </div>
-                <h2 class="font-serif text-4xl text-[#2C302E] mb-4">Promociones Activas</h2>
-                <div class="grid gap-4">
-                    <article class="promo-card flex items-start gap-4">
-                        <div class="flex flex-col gap-3">
-                            <div class="flex items-center gap-3">
-                                <div class="promo-badge">2x1</div>
-                                <span class="discount-small" data-code="RUTA10">RUTA10</span>
-                            </div>
-                        </div>
-                        <div class="flex-1">
-                            <h3 class="text-xl font-semibold text-[#2C302E]">Doble aventura en sleeping bags</h3>
-                            <p class="text-gray-600">Llévate dos sacos térmicos por el precio de uno y duerme cómodo sin importar el clima.</p>
-                        </div>
-                    </article>
-                    <article class="promo-card flex items-start gap-4">
-                        <div class="flex flex-col gap-3">
-                            <div class="flex items-center gap-3">
-                                <div class="promo-badge">10% OFF</div>
-                                <span class="discount-small" data-code="Aventura15">Aventura15</span>
-                            </div>
-                        </div>
-                        <div class="flex-1">
-                            <h3 class="text-xl font-semibold text-[#2C302E]">Descuento en mochilas premium</h3>
-                            <p class="text-gray-600">10% de descuento en mochilas de trekking seleccionadas para viajes largos.</p>
-                        </div>
-                    </article>
-                    <article class="promo-card flex items-start gap-4">
-                        <div class="flex flex-col gap-3">
-                            <div class="flex items-center gap-3">
-                                <div class="promo-badge">Envío gratis</div>
-                                <span class="discount-small" data-code="VERANO20">VERANO20</span>
-                            </div>
-                        </div>
-                        <div class="flex-1">
-                            <h3 class="text-xl font-semibold text-[#2C302E]">Envío gratuito en compras mayores a $100</h3>
-                            <p class="text-gray-600">Recibe tu equipo en casa sin costos adicionales y listo para partir.</p>
-                        </div>
-                    </article>
-                </div>
-
+<h2 class="font-serif text-4xl text-[#2C302E] mb-4">Promociones vigentes</h2><div id="promotionCatalogue" class="grid gap-4" aria-live="polite">Cargando promociones…</div>
                 <div class="mt-10 rounded-lg bg-[#2C302E] text-white p-8 shadow-2xl">
                     <div class="flex items-center justify-between gap-4 mb-4">
                         <div>
@@ -108,15 +66,15 @@
                         <span class="inline-flex items-center gap-2 rounded-full bg-black/20 px-4 py-2 text-sm font-semibold"><i class="bi bi-shield-check"></i> Aplicación segura</span>
                     </div>
                     <div class="rounded-lg bg-black/20 p-6 text-white shadow-lg">
-                        <p class="text-sm text-slate-300">Los códigos mostrados al lado de cada promoción son válidos para esta simulación.</p>
-                        <p class="mt-4 text-xs text-slate-400">Sin botón de aplicación — solo visualización de promociones y códigos.</p>
+                        <p class="text-sm text-slate-300">Las condiciones y la vigencia se verifican nuevamente al confirmar el pedido.</p>
+                        <p class="mt-4 text-xs text-slate-400"><a href="equipo.html?openCart=1" class="btn btn-secondary">Ir a mi carrito</a></p>
                     </div>
                     <div class="mt-6 rounded-lg bg-white p-6 text-[#2C302E] shadow-lg">
                         <p class="text-sm text-gray-500">Total estimado</p>
                         <div class="mt-3 flex items-end justify-between gap-4">
                             <div>
-                                <p class="text-3xl font-bold" id="totalValue">$149.00</p>
-                                <p class="text-sm text-gray-500">Muestra cómo se vería tu compra con el código.</p>
+                                <p class="text-3xl font-bold" id="totalValue">—</p>
+                                <p class="text-sm text-gray-500">El importe definitivo se calcula en el checkout.</p>
                             </div>
                             <span id="discountBadge" class="hidden rounded-full bg-emerald-100 text-emerald-800 px-4 py-2 text-sm font-semibold"></span>
                         </div>
@@ -126,27 +84,7 @@
 
             <div class="bg-white p-10 rounded-xl shadow-xl border border-stone-200">
                 <h2 class="font-serif text-4xl text-[#2C302E] mb-4">Producto Destacado</h2>
-                <div class="featured-card rounded-xl overflow-hidden shadow-xl">
-                    <img src="https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=900&h=600&fit=crop" alt="Tienda destacada" class="w-full object-cover h-72" />
-                    <div class="p-8 bg-white">
-                        <span class="inline-flex items-center gap-2 text-sm uppercase tracking-widest text-[#606C5A] font-semibold mb-4"><i class="bi bi-star-fill"></i> Recomendado</span>
-                        <h3 class="font-serif text-3xl text-[#2C302E] mb-4">Tienda Pro-Series 2 personas</h3>
-                        <p class="text-gray-600 mb-6">Ligera, resistente y diseñada para mantenerte seco cuando el clima cambia rápido.</p>
-                        <div class="flex items-center justify-between gap-4 mb-6">
-                            <div>
-                                <p class="text-sm text-gray-500">Precio desde</p>
-                                <p class="font-serif text-3xl text-[#2C302E]">$120.00</p>
-                            </div>
-                            <button type="button" class="btn btn-secondary inline-flex items-center gap-2" onclick="window.shop.addToCart(1, true)"><i class="bi bi-cart-plus-fill"></i> Comprar ahora</button>
-                        </div>
-                        <div class="grid gap-3 sm:grid-cols-2 text-gray-700">
-                            <p><i class="bi bi-check2-circle text-[#606C5A]"></i> Armado fácil en minutos</p>
-                            <p><i class="bi bi-check2-circle text-[#606C5A]"></i> Impermeable y ventilada</p>
-                            <p><i class="bi bi-check2-circle text-[#606C5A]"></i> Compacta para mochila</p>
-                            <p><i class="bi bi-check2-circle text-[#606C5A]"></i> Garantía de satisfacción</p>
-                        </div>
-                    </div>
-                </div>
+<div id="promotionFeatured"></div>
             </div>
         </section>
 
@@ -243,6 +181,7 @@
     </div>
 
     <script src="js/access.js"></script>
+<script src="js/commerce-client.js"></script>
 <script src="js/live-sync.js"></script>
 <script src="js/shop.js"></script>
     <script src="js/auth.js"></script>

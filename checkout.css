@@ -395,3 +395,9 @@
     .generated-invoice-head { display: grid; }
     .generated-invoice-head div:last-child { justify-items: start; text-align: left; }
 }
+/* Persisted receipts and simulated email content remain readable on narrow screens. */
+.receipt strong, .receipt-mail, .confirmation-card > p { overflow-wrap: anywhere; }
+.receipt-product small { display: block; font-size: .8rem; font-weight: 400; }
+.receipt-mail { margin-top: 1rem; text-align: left; }
+.receipt-mail summary { cursor: pointer; font-weight: 600; }
+.receipt-mail pre { white-space: pre-wrap; font-family: inherit; font-size: .8rem; max-height: 22rem; overflow-y: auto; }

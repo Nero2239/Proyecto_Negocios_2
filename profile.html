@@ -101,6 +101,8 @@
                     <div id="profileBusinessLinks" class="profile-business-links"></div>
                 </section>
 
+                <p id="commerceNotice" role="status" aria-live="polite"></p>
+                <div id="commerceProfile" hidden></div>
                 <section id="profilePurchases" class="profile-section-card">
                     <div class="profile-section-header">
                         <div>
@@ -227,8 +229,11 @@
     </div>
 
     <script src="js/access.js"></script>
+<script src="js/commerce-client.js"></script>
+<script src="js/receipts.js"></script>
 <script src="js/live-sync.js"></script>
 <script src="js/profile.js"></script>
+<script src="js/commerce-ui.js"></script>
     <div id="purchaseDetailModal" class="purchase-detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="purchaseDetailTitle">
         <div class="purchase-detail-backdrop" data-close-purchase></div>
         <div class="purchase-ticket-panel">

@@ -20,7 +20,8 @@
     </nav>
 
     <main class="min-h-screen flex items-center justify-center py-32 px-6 lg:px-10">
-        <div id="checkoutContainer" class="w-full max-w-6xl">
+        <p id="checkoutMessage" role="status" aria-live="polite" class="text-center px-6"></p>
+<div id="checkoutContainer" class="w-full max-w-6xl">
             <!-- This will be hidden after payment -->
             <div id="checkoutProcess">
                 <div class="text-center mb-12 text-white">
@@ -56,20 +57,20 @@
                             <form id="addressForm" class="space-y-4">
                                 <div class="form-group">
                                     <label for="fullName">Nombre completo</label>
-                                    <input type="text" id="fullName" class="form-input" placeholder="Tu nombre y apellido" autocomplete="name">
+                                    <input type="text" id="fullName" required class="form-input" placeholder="Tu nombre y apellido" autocomplete="name">
                                 </div>
                                 <div class="form-group">
                                     <label for="address">Dirección</label>
-                                    <input type="text" id="address" class="form-input" placeholder="Calle, número, depto." autocomplete="street-address">
+                                    <input type="text" id="address" required class="form-input" placeholder="Calle, número, depto." autocomplete="street-address">
                                 </div>
                                 <div class="grid grid-cols-2 gap-4">
                                     <div class="form-group">
                                         <label for="city">Ciudad</label>
-                                        <input type="text" id="city" class="form-input" placeholder="Tu ciudad" autocomplete="address-level2">
+                                        <input type="text" id="city" required class="form-input" placeholder="Tu ciudad" autocomplete="address-level2">
                                     </div>
                                     <div class="form-group">
                                         <label for="zipCode">Código Postal</label>
-                                        <input type="text" id="zipCode" class="form-input" placeholder="C.P." inputmode="numeric" autocomplete="postal-code">
+                                        <input type="text" id="zipCode" required pattern="[0-9]{5}" maxlength="5" class="form-input" placeholder="C.P." inputmode="numeric" autocomplete="postal-code">
                                     </div>
                                 </div>
                             </form>
@@ -105,35 +106,13 @@
                             <!-- Payment Details -->
                             <div id="paymentDetails" class="mt-6">
                                 <div id="card-details">
-                                    <form id="cardForm" class="space-y-4">
-                                        <div class="form-group">
-                                            <label for="cardName">Nombre en la tarjeta</label>
-                                            <input type="text" id="cardName" class="form-input" placeholder="Como aparece en la tarjeta" autocomplete="cc-name">
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="cardNumber">Número de tarjeta</label>
-                                            <input type="text" id="cardNumber" class="form-input" placeholder="0000 0000 0000 0000" inputmode="numeric" maxlength="19" autocomplete="cc-number">
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div class="form-group">
-                                                <label for="cardExpiry">Vencimiento</label>
-                                                <input type="text" id="cardExpiry" class="form-input" placeholder="MM/AA" inputmode="numeric" maxlength="5" autocomplete="cc-exp">
-                                            </div>
-                                            <div class="form-group">
-                                                <label for="cardCvv">CVV</label>
-                                                <input type="text" id="cardCvv" class="form-input" placeholder="123" inputmode="numeric" maxlength="4" autocomplete="cc-csc">
-                                            </div>
-                                        </div>
-                                    </form>
+<p>Pago con tarjeta simulado. No ingreses números de tarjeta, CVV ni datos bancarios reales.</p>
                                 </div>
                                 <div id="transfer-details" class="payment-info-box hidden">
-                                    <p>Realiza la transferencia a la siguiente cuenta:</p>
-                                    <p><strong>Banco:</strong> Banco Aventura</p>
-                                    <p><strong>CBU/Alias:</strong> RUTA.SALVAJE.MP</p>
-                                    <p><strong>Titular:</strong> Ruta Salvaje S.A.</p>
-                                </div>
+                                    <p>Transferencia simulada: el pedido quedará pendiente de confirmación por administración o ventas.</p>
+                                                                    </div>
                                 <div id="ewallet-details" class="payment-info-box hidden">
-                                    <p>Tu saldo simulado es de <strong>$500.00</strong>.</p>
+                                    <p>El saldo se consultará desde tu monedero.</p>
                                     <p>Se descontará el total de tu compra de este saldo.</p>
                                 </div>
                             </div>
@@ -174,12 +153,12 @@
                         <i class="bi bi-patch-check-fill"></i>
                     </div>
                     <p class="eyebrow">Comprobante de compra</p>
-                    <h1>¡Pago aprobado!</h1>
-                    <p>Tu pedido ha sido confirmado. Gracias por elegir el camino.</p>
+                    <h1 id="confirmationTitle"></h1>
+                    <p id="confirmationMessage" role="status" aria-live="polite"></p>
                     <div id="receipt" class="receipt" aria-label="Factura o comprobante de compra">
                         <div class="receipt-header">
                             <div>
-                                <p class="receipt-kicker">Comprobante de pago</p>
+                                <p id="receiptKind" class="receipt-kicker">Comprobante de compra</p>
                                 <h2>Ruta Salvaje</h2>
                                 <p>Equipo para salir del mapa</p>
                             </div>
@@ -191,7 +170,7 @@
                         </div>
                         <div class="receipt-customer">
                             <p class="receipt-section-title">Datos del cliente</p>
-                            <div><strong id="receiptCustomerName"></strong><span id="receiptCustomerAddress"></span></div>
+                            <div><strong id="receiptCustomerName"></strong><span id="receiptCustomerEmail"></span><span id="receiptCustomerAddress"></span></div>
                         </div>
                         <div class="receipt-products">
                             <p class="receipt-section-title">Productos</p>
@@ -199,15 +178,18 @@
                             <div id="confirmationSummary"></div>
                         </div>
                         <div class="receipt-total">
-                            <span>Total pagado</span>
+                            <span>Total del pedido</span>
                             <strong id="receiptTotal"></strong>
                         </div>
                         <p class="receipt-payment">Método de pago: <strong id="receiptPaymentMethod"></strong></p>
+                        <p class="receipt-payment">Estado del pedido: <strong id="receiptOrderStatus"></strong></p>
+                        <div id="receiptEmailPreview"></div>
                     </div>
                     <p class="receipt-note">Esta factura es un comprobante generado para esta simulación.</p>
-                    <button id="downloadReceiptBtn" class="btn btn-secondary" type="button"><i class="bi bi-download"></i> Descargar (simulado)</button>
+                    <button id="downloadReceiptBtn" class="btn btn-secondary" type="button"><i class="bi bi-download"></i> Descargar comprobante</button>
                     <div class="confirmation-actions">
                         <a href="index.html" class="btn btn-primary">Volver al inicio</a>
+                        <a href="profile.html" class="btn btn-secondary">Ver mis pedidos y comprobantes</a>
                     </div>
                     <button id="requestInvoiceBtn" class="invoice-link" type="button"><i class="bi bi-receipt"></i> Solicitar factura</button>
                 </div>
@@ -260,6 +242,8 @@
         </section>
     </div>
 
-    <script src="checkout.js"></script>
+    <script src="js/commerce-client.js"></script>
+    <script src="js/receipts.js"></script>
+<script src="checkout.js"></script>
 </body>
 </html>

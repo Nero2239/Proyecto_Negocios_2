@@ -29,6 +29,9 @@ body.purchase-detail-open {
     gap: 1.25rem;
     margin-top: 2rem;
 }
+#commerceProfile { display: grid; gap: 1.25rem; }
+#commerceProfile h2 { margin: 0 0 1rem; font-size: 1.4rem; color: #2c302e; }
+#commerceNotice { color: #606c5a; overflow-wrap: anywhere; }
 
 .profile-hero-card {
     display: flex;
@@ -599,3 +602,9 @@ body.purchase-detail-open {
         grid-template-columns: 1fr;
     }
 }
+.purchase-ticket-panel { overflow-wrap: anywhere; }
+.purchase-ticket-panel .receipt-product small { display: block; font-size: .8rem; font-weight: 400; }
+.receipt-breakdown { padding: 1rem 0; }
+.receipt-mail { margin: 1rem 0; }
+.receipt-mail summary { cursor: pointer; font-weight: 600; }
+.receipt-mail pre { white-space: pre-wrap; font-family: inherit; font-size: .8rem; max-height: 22rem; overflow-y: auto; }

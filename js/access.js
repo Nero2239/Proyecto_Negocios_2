@@ -1,7 +1,7 @@
 (() => {
 const views = {
-    admin: ['dashboard', 'productos', 'pedidos', 'promociones', 'clientes', 'reportes', 'usuarios', 'crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes', 'erp'],
-    ventas: ['dashboard', 'crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'erp'],
+    admin: ['transferencias', 'comercio', 'tickets', 'dashboard', 'productos', 'pedidos', 'promociones', 'clientes', 'reportes', 'usuarios', 'crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes', 'erp'],
+    ventas: ['tickets', 'transferencias', 'dashboard', 'crm', 'interacciones', 'dashboard-crm', 'mi-actividad', 'erp'],
     logistica: ['dashboard', 'scm-dashboard', 'scm-productos', 'scm-inventario', 'scm-proveedores', 'scm-pedidos', 'scm-reportes', 'erp'],
     usuario: []
 };
@@ -25,6 +25,9 @@ function profileLinks(role) {
     const permitted = allowedViews(role);
     return [
         { id: 'adminPanelLink', view: home, label: ({ admin: 'Panel de administración', ventas: 'Panel de ventas', logistica: 'Panel de logística' })[normalizeRole(role)], icon: 'bi-speedometer2' },
+        { view: 'tickets', label: 'Atención a clientes', icon: 'bi-chat-dots' },
+        { view: 'transferencias', label: 'Confirmar transferencias', icon: 'bi-bank' },
+        { view: 'comercio', label: 'Promociones, IVA y monederos', icon: 'bi-wallet' },
         { view: 'erp', label: 'Operación ERP', icon: 'bi-diagram-3' },
         { view: 'crm', label: 'Clientes e interacciones CRM', icon: 'bi-people' },
         { view: 'scm-dashboard', label: 'Inventario y suministros SCM', icon: 'bi-boxes' },
