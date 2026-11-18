@@ -128,14 +128,14 @@ service cloud.firestore {
     }
 
     match /erp_ordenes/{orderId} {
-      allow read: if isStaff();
+      allow read: if isStaff() || (signedIn() && resource.data.usuario_id == request.auth.uid);
       allow create: if (isAdmin() || isSales())
         && request.resource.data.estado == 'pendiente'
         && request.resource.data.usuario_id == request.auth.uid
         && request.resource.data.cliente_id is string
         && request.resource.data.productos is list
         && request.resource.data.total is number;
-      allow update: if isAdmin()
+      allow update: if resource.data.get('origen', '') != 'checkout' && (isAdmin()
         || ((isSales() || isLogistics())
           && resource.data.estado == 'pendiente'
           && request.resource.data.estado == 'procesada'
@@ -143,8 +143,8 @@ service cloud.firestore {
           && processedERPOrder(orderId))
         || ((isAdmin() || isSales())
           && resource.data.estado == 'pendiente'
-          && request.resource.data.estado == 'cancelada');
-      allow delete: if isAdmin();
+          && request.resource.data.estado == 'cancelada'));
+      allow delete: if isAdmin() && resource.data.get('origen', '') != 'checkout';
     }
 
     match /erp_procesos/{processId} {
@@ -177,6 +177,35 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // Checkout, balances and financial audit records are written only by callable backend functions.
+    match /carritos/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+      match /migraciones/{key} { allow read, write: if false; }
+    }
+    match /pagos/{id} {
+      allow read: if isAdmin() || isSales() || (signedIn() && resource.data.usuario_id == request.auth.uid);
+      allow write: if false;
+    }
+    match /notificaciones/{id} {
+      allow read: if isAdmin() || isSales() || (signedIn() && resource.data.usuario_id == request.auth.uid);
+      allow write: if false;
+    }
+    match /monederos/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow write: if false;
+      match /movimientos/{id} {
+        allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+        allow write: if false;
+      }
+    }
+    match /promociones/{code} { allow read: if true; allow write: if false; }
+    match /configuracion/comercio { allow read: if true; allow write: if false; }
+    match /tickets/{id} {
+      allow read: if isAdmin() || isSales() || (signedIn() && resource.data.usuario_id == request.auth.uid);
+      allow write: if false;
     }
   }
 }

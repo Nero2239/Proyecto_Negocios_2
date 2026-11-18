@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return {
                     ventas_totales: processed.reduce((sum, order) => sum + Number(order.total || 0), 0),
                     ordenes_procesadas: processed.length,
-                    ordenes_pendientes: orders.filter(order => order.estado === 'pendiente').length,
+                    ordenes_pendientes: orders.filter(order => ['pendiente', 'pendiente_pago'].includes(order.estado)).length,
                     productos_vendidos: processed.reduce((sum, order) => sum + (order.productos || []).reduce((units, line) => units + Number(line.cantidad || 0), 0), 0),
                     clientes_activos: clients.filter(client => client.estado !== 'inactivo').length,
                     inventario_disponible: products.reduce((sum, product) => sum + Number(product.stock_actual || 0), 0),

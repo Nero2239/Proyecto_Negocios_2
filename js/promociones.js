@@ -1,77 +1,3 @@
-const promoData = {
-    availableCodes: ['RUTA10', 'Aventura15', 'VERANO20'],
-    baseTotal: 149.00,
-    currentDiscount: 0,
-};
-
-function formatPrice(value) {
-    return `$${value.toFixed(2)}`;
-}
-
-function renderTotal() {
-    const totalValue = document.getElementById('totalValue');
-    const discountBadge = document.getElementById('discountBadge');
-    const finalTotal = promoData.baseTotal * (1 - promoData.currentDiscount / 100);
-
-    if (totalValue) {
-        totalValue.textContent = formatPrice(finalTotal);
-    }
-
-    if (discountBadge) {
-        if (promoData.currentDiscount > 0) {
-            discountBadge.textContent = `${promoData.currentDiscount}% OFF aplicado`;
-            discountBadge.classList.remove('hidden');
-        } else {
-            discountBadge.classList.add('hidden');
-        }
-    }
-}
-
-function showPopout(message) {
-    const popup = document.getElementById('discountPopup');
-    if (!popup) return;
-
-    popup.querySelector('p').textContent = message;
-    popup.classList.remove('hidden');
-    setTimeout(() => popup.classList.add('hidden'), 3200);
-}
-
-function showSuccess() {
-    const success = document.getElementById('discountSuccess');
-    if (!success) return;
-
-    success.classList.remove('hidden');
-    setTimeout(() => success.classList.add('hidden'), 3000);
-}
-
-function applyDiscountCode() {
-    const input = document.getElementById('discountCodeInput');
-    if (!input) return;
-
-    const code = input.value.trim().toUpperCase();
-    const success = document.getElementById('discountSuccess');
-    const popup = document.getElementById('discountPopup');
-
-    if (promoData.availableCodes.includes(code)) {
-        promoData.currentDiscount = code === 'RUTA10' ? 10 : code === 'Aventura15' ? 15 : 20;
-        renderTotal();
-        if (success) {
-            success.classList.remove('hidden');
-        }
-        if (popup) {
-            popup.classList.add('hidden');
-        }
-        showSuccess();
-    } else {
-        promoData.currentDiscount = 0;
-        renderTotal();
-        if (success) {
-            success.classList.add('hidden');
-        }
-        showPopout('Aún no sacamos esa promo');
-    }
-}
-
 function addComment(event) {
     event.preventDefault();
 
@@ -110,27 +36,19 @@ function addComment(event) {
     setTimeout(() => feedback.classList.add('hidden'), 2800);
 }
 
-function initPromotionPage() {
-    const applyButton = document.getElementById('applyDiscountButton');
-    const commentForm = document.getElementById('commentForm');
 
-    if (applyButton) {
-        applyButton.addEventListener('click', applyDiscountCode);
-    }
-    // Promo-card apply buttons
-    const promoApplyButtons = document.querySelectorAll('.promo-apply-btn');
-    promoApplyButtons.forEach(btn => {
-        btn.addEventListener('click', function(){
-            const code = (this.getAttribute('data-code') || '').toUpperCase();
-            const input = document.getElementById('discountCodeInput');
-            if(input){ input.value = code; }
-            applyDiscountCode();
-        });
-    });
-    if (commentForm) {
-        commentForm.addEventListener('submit', addComment);
-    }
-    renderTotal();
-}
-
-window.addEventListener('DOMContentLoaded', initPromotionPage);
+document.addEventListener('DOMContentLoaded', async () => {
+ const api=window.RutaCommerce, esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+ document.getElementById('commentForm')?.addEventListener('submit',addComment);
+ async function refresh(){
+  const promos=await api.read('promociones');window.rutaPromotions=promos;
+  const active=promos.filter(row=>row.activa&&Date.parse(row.inicio)<=Date.now()&&Date.parse(row.fin)>=Date.now()&&(!row.limiteUsos||row.usos<row.limiteUsos));
+  document.getElementById('promotionCatalogue').innerHTML=active.map(row=>'<article class="promo-card"><h3>'+esc(row.nombre)+'</h3><p>'+row.descuentoBps/100+'% · Código '+esc(row.id)+'</p><p>Compra mínima: '+api.money(row.minimoCents)+' · Vigente hasta '+esc(new Date(row.fin).toLocaleString('es-MX'))+'</p><p>'+esc(row.categoria||'Todas las categorías')+' '+esc(row.productoId||'')+'</p><button class="btn btn-primary" data-promo="'+esc(row.id)+'" type="button">Usar en el carrito</button></article>').join('')||'<p>No hay promociones vigentes.</p>';
+  for(const button of document.querySelectorAll('[data-promo]'))button.onclick=()=>{localStorage.setItem('campingPromo',button.dataset.promo);location.href='equipo.html?openCart=1';};
+  document.getElementById('totalValue').textContent=api.money(JSON.parse(localStorage.getItem('campingCart')||'[]').reduce((n,row)=>n+Math.round(Number(row.price||0)*100)*row.quantity,0));
+  const product=(await api.read('scm_productos')).find(row=>row.activo!==false&&row.stock_actual>0);
+  document.getElementById('promotionFeatured').innerHTML=product?'<h3>'+esc(product.nombre)+'</h3><p>'+esc(product.descripcion)+'</p><p>'+api.money(Math.round(Number(product.precio_venta??product.precio??product.costo_unitario)*100))+' antes de IVA</p><a class="btn btn-secondary" href="equipo.html">Ver en el catálogo</a>':'<p>Consulta las existencias en el catálogo.</p>';
+ }
+ try {const ctx=await api.init();await refresh();window.RutaSalvajeLiveSync.watchChanges({onSnapshot:ctx.dbSdk.onSnapshot,references:[ctx.dbSdk.collection(ctx.db,'promociones'),ctx.dbSdk.collection(ctx.db,'scm_productos')],refresh,onError:error=>{document.getElementById('promotionCatalogue').textContent=error.message;}});}
+ catch(error){document.getElementById('promotionCatalogue').textContent='No se pudieron cargar las promociones: '+error.message;}
+});

@@ -167,6 +167,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('rememberUser', remember ? '1' : '0');
                 sessionStorage.setItem('lastEmail', email);
 
+                if (window.RutaCommerce) {
+                    try { await window.RutaCommerce.prepareCart(); }
+                    catch (error) { console.warn('Carrito local conservado; sincronización pendiente:', error.message); }
+                }
+
                 const opensBusinessPanel = ['admin', 'ventas', 'logistica'].includes(normalizedRole);
                 showMessage(opensBusinessPanel ? 'Acceso verificado. Abriendo el panel empresarial…' : 'Acceso verificado. Abriendo tu perfil…');
                 setTimeout(() => { window.location.href = opensBusinessPanel ? `admin.html?view=${encodeURIComponent(roleHome(normalizedRole))}` : 'profile.html'; }, 500);

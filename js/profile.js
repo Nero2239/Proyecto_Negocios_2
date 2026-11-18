@@ -7,6 +7,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let stopProfileSync;
     let revision = 0;
     let previousFocus;
+    let selectedCloudOrder = null, currentReceipt = null;
+
+    function renderCloudReceipt(order) {
+        currentReceipt = order;
+        $('purchaseDetailContent').innerHTML = window.RutaReceipts.markup(order);
+    }
 
     function message(text = '') {
         $('profileMessage').textContent = text;
@@ -19,6 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function closePurchase() {
+        selectedCloudOrder = null; currentReceipt = null;
         $('purchaseDetailModal').classList.add('hidden');
         document.body.classList.remove('purchase-detail-open');
         previousFocus?.focus();
@@ -34,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.warn('No se pudo leer el historial guardado:', error);
             }
         }
+        if (user && window.rutaCloudOrders?.uid === user.uid) purchases = [...window.rutaCloudOrders.orders, ...purchases.map(row => ({...row, status: (row.status || 'Guardado') + ' · historial local anterior'}))];
         $('purchaseCount').textContent = `${purchases.length} ${purchases.length === 1 ? 'pedido' : 'pedidos'}`;
         $('purchaseHistory').innerHTML = purchases.length ? purchases.map((purchase, index) => {
             const products = Array.isArray(purchase.products) ? purchase.products : [];
@@ -45,14 +53,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
                 <button class="btn btn-secondary purchase-detail-button" type="button" data-purchase-index="${index}"><i class="bi bi-receipt"></i> Ver detalle</button>
             </article>`;
-        }).join('') : `<div class="profile-empty-state">${user ? 'Aún no tienes compras guardadas en este navegador.' : 'Inicia sesión para consultar tus compras.'}</div>`;
+        }).join('') : `<div class="profile-empty-state">${user ? 'Aún no tienes pedidos registrados.' : 'Inicia sesión para consultar tus compras.'}</div>`;
+        if (selectedCloudOrder && !$('purchaseDetailModal').classList.contains('hidden')) {
+            const updated = purchases.find(purchase => purchase.order?.id === selectedCloudOrder)?.order;
+            if (updated?.comprobante) renderCloudReceipt(updated);
+        }
     }
 
-    $('purchaseHistory').addEventListener('click', event => {
+    window.addEventListener('commerce-orders', renderPurchases);
+    $('purchaseHistory').addEventListener('click', async event => {
         const button = event.target.closest('[data-purchase-index]');
         const purchase = button && purchases[Number(button.dataset.purchaseIndex)];
         if (!purchase) return;
         previousFocus = button;
+        if (purchase.order?.origen === 'checkout') {
+            const order = purchase.order, owner = user?.uid;
+            selectedCloudOrder = order.id; currentReceipt = null;
+            $('purchaseDetailModal').classList.remove('hidden');
+            document.body.classList.add('purchase-detail-open');
+            $('closePurchaseDetail').focus();
+            if (order.comprobante) { renderCloudReceipt(order); return; }
+            $('purchaseDetailContent').innerHTML = '<h2 id="purchaseDetailTitle">Ruta Salvaje</h2><p>Recuperando el comprobante de tu pedido registrado…</p>';
+            try {
+                // Older checkout orders gain their receipt without repeating a charge or sale.
+                const stored = await window.RutaCommerce.call('receiptGet', { id: order.id });
+                if (user?.uid === owner && selectedCloudOrder === order.id) renderCloudReceipt(stored);
+            } catch (error) {
+                if (user?.uid === owner && selectedCloudOrder === order.id) $('purchaseDetailContent').innerHTML = `<h2 id="purchaseDetailTitle">Ruta Salvaje</h2><p>Tu pedido sigue registrado. No se pudo recuperar el comprobante: ${escapeHtml(error.message)}</p>`;
+            }
+            return;
+        }
+        selectedCloudOrder = null; currentReceipt = null;
         const products = Array.isArray(purchase.products) ? purchase.products : [];
         $('purchaseDetailContent').innerHTML = `<p class="purchase-ticket-kicker">Ticket de compra</p>
             <div class="purchase-ticket-heading"><div><h2 id="purchaseDetailTitle">Ruta Salvaje</h2><p>Resumen de pedido ${escapeHtml(purchase.id)}</p></div><i class="bi bi-tree-fill" aria-hidden="true"></i></div>
@@ -63,6 +94,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         $('purchaseDetailModal').classList.remove('hidden');
         document.body.classList.add('purchase-detail-open');
         $('closePurchaseDetail').focus();
+    });
+    $('purchaseDetailContent').addEventListener('click', event => {
+        if (event.target.closest('[data-download-cloud-receipt]') && currentReceipt) window.RutaReceipts.download(currentReceipt);
     });
     $('closePurchaseDetail').addEventListener('click', closePurchase);
     document.querySelector('[data-close-purchase]').addEventListener('click', closePurchase);

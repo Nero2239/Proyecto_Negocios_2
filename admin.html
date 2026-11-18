@@ -27,6 +27,9 @@
             </div>
 
             <nav class="sidebar-nav">
+<button class="nav-link" type="button" data-view="comercio">Promociones, IVA y monederos</button>
+<button class="nav-link" type="button" data-view="tickets">Tickets de atención</button>
+<button class="nav-link" type="button" data-view="transferencias">Transferencias pendientes</button>
                 <button type="button" class="nav-link active" data-view="dashboard"><i class="bi bi-grid"></i><span>Dashboard</span></button>
                 <button type="button" class="nav-link" data-view="productos"><i class="bi bi-box-seam"></i><span>Productos</span></button>
                 <button type="button" class="nav-link" data-view="pedidos"><i class="bi bi-bag-check"></i><span>Pedidos</span></button>
@@ -79,7 +82,11 @@
 
             <div id="feedbackMessage" class="feedback-message" aria-live="polite"></div>
 
-            <section id="view-dashboard" class="view-section active">
+            <p id="commerceNotice" role="status" aria-live="polite"></p>
+<section id="view-comercio" class="view-section"><div id="commerceAdmin"></div></section>
+<section id="view-tickets" class="view-section"><article class="panel-card"><h3>Atención a clientes CRM</h3><div id="staffTickets"></div></article></section>
+<section id="view-transferencias" class="view-section"><article class="panel-card"><h3>Confirmar transferencias simuladas</h3><div id="transferList"></div></article></section>
+<section id="view-dashboard" class="view-section active">
                 <div class="hero-card">
                     <div>
                         <p class="eyebrow">Acceso administrativo</p>
@@ -925,8 +932,10 @@
     <div id="scmProductDetailModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scmProductDetailTitle"><div class="modal-backdrop"></div><div class="modal-content max-w-2xl"><button id="scmProductDetailClose" class="modal-close" type="button" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button><div class="modal-body"><img id="scmProductDetailImage" class="scm-detail-image hidden" alt="Equipo de camping"><div id="scmProductDetailOrigin" class="source-badge"></div><h3 id="scmProductDetailTitle"></h3><p id="scmProductDetailDescription" class="modal-description"></p><div id="scmProductDetailMeta" class="scm-detail-meta"></div><button id="scmProductDetailEdit" class="btn btn-primary" type="button"><i class="bi bi-pencil"></i> Editar equipo</button></div></div></div>
 
     <script src="js/access.js"></script>
+<script src="js/commerce-client.js"></script>
 <script src="js/live-sync.js"></script>
 <script src="js/admin.js"></script>
+<script src="js/commerce-ui.js"></script>
     <script src="js/crm.js"></script>
     <script src="js/scm.js"></script>
     <script src="js/erp.js"></script>

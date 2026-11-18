@@ -24,18 +24,20 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-let productos = [
-    { id: 1, nombre: 'Tienda Pro-Series', precio: 120, descripcion: 'Resistente al agua y viento, para 2 personas.', detalle: 'Material reforzado y costuras selladas.', esRecomendado: true, categoria: 'tiendas', descuento: 0, rating: 4.9, stock: 8 },
-    { id: 2, nombre: 'Saco Térmico -5°C', precio: 85, descripcion: 'Máximo confort en noches frías de montaña.', detalle: 'Aislamiento térmico premium.', esRecomendado: false, categoria: 'sacos', descuento: 10, rating: 4.7, stock: 5 },
-    { id: 3, nombre: 'Linterna Solar LED', precio: 30, descripcion: 'Recargable y duradera.', detalle: 'Tres modos de iluminación y carga solar integrada.', esRecomendado: true, categoria: 'iluminacion', descuento: 0, rating: 4.8, stock: 12 },
-    { id: 4, nombre: 'Mochila Ergonómica 50L', precio: 95, descripcion: 'Espacio y comodidad para travesías largas.', detalle: 'Soporte lumbar y compartimentos.', esRecomendado: false, categoria: 'mochilas', descuento: 15, rating: 4.6, stock: 6 },
-    { id: 5, nombre: 'Tienda Compact 1P', precio: 70, descripcion: 'Ligera y fácil de montar.', detalle: 'Perfecta para rutas rápidas.', esRecomendado: false, categoria: 'tiendas', descuento: 20, rating: 4.5, stock: 4 },
-    { id: 6, nombre: 'Saco UltraLight 0°C', precio: 110, descripcion: 'Aislamiento alto con bajo peso.', detalle: 'Diseñado para alta montaña.', esRecomendado: true, categoria: 'sacos', descuento: 0, rating: 4.9, stock: 7 },
-    { id: 7, nombre: 'Luz Frontal PRO', precio: 22, descripcion: 'Fuerte y cómoda.', detalle: 'Varios modos y larga duración.', esRecomendado: false, categoria: 'iluminacion', descuento: 25, rating: 4.4, stock: 10 },
-    { id: 8, nombre: 'Organizador de Mochila', precio: 18, descripcion: 'Bolsillos y funda impermeable.', detalle: 'Mantén tus objetos ordenados.', esRecomendado: false, categoria: 'accesorios', descuento: 5, rating: 4.3, stock: 9 },
-    { id: 9, nombre: 'Tienda 3 Estaciones', precio: 150, descripcion: 'Versátil y ligera para 3 estaciones.', detalle: 'Costuras reforzadas y ventilación.', esRecomendado: true, categoria: 'tiendas', descuento: 0, rating: 4.8, stock: 5 },
-    { id: 10, nombre: 'Colchoneta Aislante', precio: 45, descripcion: 'Aislamiento y comodidad para acampar.', detalle: 'Inflable con funda resistente.', esRecomendado: false, categoria: 'accesorios', descuento: 0, rating: 4.5, stock: 11 },
-];
+let productos = [];
+const shopEscape = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+let productDetailFocus;
+
+function readShopCart() {
+    try {
+        const rows = JSON.parse(localStorage.getItem('campingCart') || '[]');
+        if (!Array.isArray(rows)) return [];
+        return rows.filter(row => row && row.id != null && Number.isInteger(Number(row.quantity)) && Number(row.quantity) > 0).map(row => ({
+            ...row, quantity: Number(row.quantity), name: String(row.name || row.nombre || 'Producto'),
+            price: Number.isFinite(Number(row.price)) ? Number(row.price) : Number.isFinite(Number(row.priceCents)) ? Number(row.priceCents) / 100 : 0
+        }));
+    } catch { return []; }
+}
 
 function normalizeImageList(value) {
     const items = Array.isArray(value) ? value : (value ? [value] : []);
@@ -74,12 +76,12 @@ function buildProductGalleryMarkup(producto, selectedImage = null) {
     return `
         <div class="product-gallery">
             <div class="product-gallery-main">
-                <img src="${activeImage}" alt="${producto.nombre}" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&h=600&fit=crop';" />
+                <img src="${shopEscape(activeImage)}" alt="${shopEscape(producto.nombre)}" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&h=600&fit=crop';" />
             </div>
             <div class="product-gallery-thumbs">
                 ${images.map((image, index) => `
-                    <button type="button" class="product-gallery-thumb ${image === activeImage ? 'active' : ''}" data-gallery-image="${image}" aria-label="Ver imagen ${index + 1}">
-                        <img src="${image}" alt="${producto.nombre} ${index + 1}" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=200&h=140&fit=crop';" />
+                    <button type="button" class="product-gallery-thumb ${image === activeImage ? 'active' : ''}" data-gallery-image="${shopEscape(image)}" aria-label="Ver imagen ${index + 1}">
+                        <img src="${shopEscape(image)}" alt="${shopEscape(producto.nombre)} ${index + 1}" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=200&h=140&fit=crop';" />
                     </button>
                 `).join('')}
             </div>
@@ -103,7 +105,7 @@ async function loadScmCatalog() {
             };
             const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
             const snapshot = await getDocs(collection(getFirestore(app), 'scm_productos'));
-            scmProducts = snapshot.docs.map(productDoc => ({ id: productDoc.id, ...productDoc.data() }));
+            scmProducts = snapshot.docs.map(productDoc => ({ ...productDoc.data(), id: productDoc.id }));
             localStorage.setItem('scm_catalog_cache', JSON.stringify(scmProducts));
         } catch (error) {
             scmProducts = JSON.parse(localStorage.getItem('scm_catalog_cache') || '[]');
@@ -118,9 +120,9 @@ async function loadScmCatalog() {
                 console.warn('Se ignoró una publicación comunitaria inválida.', error);
             }
         }
-        const sourceProducts = scmProducts.filter(item => item.origen === 'tienda').map(item => ({ ...item, _source: 'store' }));
+        const sourceProducts = scmProducts.filter(item => item.activo !== false && item.origen !== 'comunidad').map(item => ({ ...item, _source: 'store' }));
         const syncedCommunityIds = new Set(scmProducts.filter(item => item.origen === 'comunidad').map(item => String(item.publicacion_id)));
-        for (const item of scmProducts.filter(product => product.origen === 'comunidad')) {
+        for (const item of scmProducts.filter(product => product.activo !== false && product.origen === 'comunidad')) {
             sourceProducts.push({ ...item, _source: 'community', communityListing: true });
         }
         for (const item of communityProducts) {
@@ -151,7 +153,7 @@ async function loadScmCatalog() {
             origen: item.origen,
             communityListing: item._source === 'community' || item.origen === 'comunidad',
             descuento: 0,
-            rating: 4.5,
+            rating: item.rating,
             esRecomendado: item.estrategia_logistica === 'PUSH',
             imagenes: normalizeImageList(item.imagenes || item.images || [item.imagen_url || item.photo || ''])
         }));
@@ -163,7 +165,7 @@ async function loadScmCatalog() {
 }
 
 const state = {
-    cart: JSON.parse(localStorage.getItem('campingCart') || '[]'),
+    cart: readShopCart(),
     activeFilter: 'all',
     activeQuery: '',
     activeCategory: 'all',
@@ -178,23 +180,35 @@ function savePromoCode() {
     localStorage.setItem('campingPromo', state.promoCode);
 }
 
-function getPromoDiscount(code) {
-    const normalized = (code || '').trim().toUpperCase();
-    const discounts = {
-        RUTA10: 0.10,
-        VERANO20: 0.20,
-        CAMPING15: 0.15,
-    };
-
-    return discounts[normalized] || 0;
+function cartAmounts(code = state.promoCode) {
+    const subtotal = state.cart.reduce((sum,row)=>sum+Math.round(Number(row.price)*100)*row.quantity,0);
+    const promo = (window.rutaPromotions||[]).find(row=>row.id===String(code||'').toUpperCase());
+    let discount=0;
+    if(promo&&promo.activa&&Date.parse(promo.inicio)<=Date.now()&&Date.parse(promo.fin)>=Date.now()&&subtotal>=(promo.minimoCents||0)&&(!promo.limiteUsos||promo.usos<promo.limiteUsos)){
+        const eligible=state.cart.reduce((sum,row)=>{const product=productos.find(p=>String(p.id)===String(row.id));return sum+((!promo.categoria||product?.categoria===promo.categoria)&&(!promo.productoId||String(row.id)===promo.productoId)?Math.round(row.price*100)*row.quantity:0);},0);
+        discount=Math.floor((eligible*promo.descuentoBps+5000)/10000);if(promo.maximoCents)discount=Math.min(discount,promo.maximoCents);
+    }
+    const rate=window.rutaTax?.activo===false?0:window.rutaTax?.ivaBps??1600;
+    const tax=Math.floor(((subtotal-discount)*rate+5000)/10000);
+    return {subtotal,discount,tax,total:subtotal-discount+tax,rate};
 }
+function getPromoDiscount(code) { const values=cartAmounts(code);return values.subtotal?values.discount/values.subtotal:0; }
 
 function formatPrice(value) {
-    return `$${value.toFixed(2)}`;
+    return `$${Number(value).toFixed(2)}`;
 }
 
 function saveCart() {
-    localStorage.setItem('campingCart', JSON.stringify(state.cart));
+    const draft = state.cart.map(row => ({ ...row }));
+    localStorage.setItem('campingCart', JSON.stringify(draft));
+    if (!window.RutaCommerce) {
+        showToast('El cliente Firebase de compras no se cargó. Recarga la página; el carrito se conserva localmente.', 'error');
+        return Promise.resolve(false);
+    }
+    return window.RutaCommerce.saveCart(draft).then(() => true).catch(error => {
+        showToast(error.message + ' El carrito local se conserva.', 'error');
+        return false;
+    });
 }
 
 function getCartCount() {
@@ -234,7 +248,7 @@ function renderProducts() {
         const origenBadge = producto.communityListing ? '<span class="product-origin-badge">Comunidad</span>' : '';
         const descuentoBadge = producto.descuento ? `<span class="product-discount">-${producto.descuento}%</span>` : '';
         const imageMarkup = producto.photo
-            ? `<img src="${producto.photo}" alt="${producto.nombre}" loading="lazy" onerror="this.onerror=null;this.parentElement.textContent='Equipo de camping'">`
+            ? `<img src="${shopEscape(producto.photo)}" alt="${shopEscape(producto.nombre)}" loading="lazy" onerror="this.onerror=null;this.parentElement.textContent='Equipo de camping'">`
             : '<span aria-hidden="true">⛺</span>';
         return `
             <article class="product-card">
@@ -243,8 +257,8 @@ function renderProducts() {
                 ${origenBadge}
                 <div class="product-image">${imageMarkup}</div>
                 <div class="product-body">
-                    <h2 class="product-title">${producto.nombre}</h2>
-                    <p class="product-description">${producto.descripcion}</p>
+                    <h2 class="product-title">${shopEscape(producto.nombre)}</h2>
+                    <p class="product-description">${shopEscape(producto.descripcion)}</p>
                     <p class="product-price">${formatPrice(producto.precio)}</p>
                     <div class="product-actions">
                         <button class="btn btn-secondary" type="button" data-product-detail="${String(producto.id).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">Ver Detalle</button>
@@ -288,48 +302,47 @@ function showProductDetail(id) {
     const producto = productos.find((item) => String(item.id) === String(id));
     if (!producto) return;
 
+    const reopening = state.selectedProductId !== null && String(state.selectedProductId) === String(id);
     state.selectedProductId = id;
     const detail = document.getElementById('productDetail');
     if (!detail) return;
+    const oldQuantity = reopening ? detail.querySelector('#quantityInput')?.value : null;
+    const oldImage = reopening ? detail.querySelector('.product-gallery-thumb.active')?.dataset.galleryImage : null;
+    const oldScroll = reopening ? detail.querySelector('.product-modal-card')?.scrollTop || 0 : 0;
+    if (!reopening) productDetailFocus = document.activeElement;
 
     document.body.classList.add('modal-open');
-    const galleryMarkup = buildProductGalleryMarkup(producto, producto.photo || getProductImages(producto)[0]);
+    const galleryMarkup = buildProductGalleryMarkup(producto, oldImage && getProductImages(producto).includes(oldImage) ? oldImage : producto.photo || getProductImages(producto)[0]);
     detail.innerHTML = `
-        <div class="product-modal-backdrop" onclick="window.shop.closeProductModal()">
-            <div class="product-modal-card" onclick="event.stopPropagation();">
-                <button class="detail-close-btn" type="button" onclick="window.shop.closeProductModal()" aria-label="Cerrar ventana">
+        <div class="product-modal-backdrop" data-product-backdrop>
+            <div class="product-modal-card" role="dialog" aria-modal="true" aria-labelledby="productDetailTitle">
+                <button class="detail-close-btn" type="button" data-close-product aria-label="Cerrar ventana">
                     <i class="bi bi-x-lg"></i>
                 </button>
                 <div class="modal-card-header">
                     <span class="text-sm uppercase tracking-[0.3em] text-naranja font-semibold">Detalle del producto</span>
-                    <h3>${producto.nombre}</h3>
+                    <h3 id="productDetailTitle">${shopEscape(producto.nombre)}</h3>
                 </div>
                 <div class="left">
-                    ${galleryMarkup || `<div class="detalle-imagen">${producto.photo ? `<img src="${producto.photo}" alt="${producto.nombre}" onerror="this.onerror=null;this.parentElement.textContent='Equipo de camping'">` : '<span aria-hidden="true">⛺</span>'}</div>`}
+                    ${galleryMarkup || '<div class="detalle-imagen"><span aria-hidden="true">⛺</span></div>'}
                     <div class="rounded-2xl bg-crema p-4 text-sm text-gray-700">
-                        <p class="font-semibold text-bosque">${producto.nombre}</p>
-                        <p class="mt-1">${producto.detalle}</p>
+                        <p class="font-semibold text-bosque">${shopEscape(producto.nombre)}</p>
+                        <p class="mt-1 product-description-text">${shopEscape(producto.detalle)}</p>
                     </div>
                 </div>
                 <div class="right">
                     <div class="flex items-center gap-4 mb-4">
-                        <div class="text-yellow-400">★★★★★</div>
                         <div class="text-sm text-gray-500">(${producto.stock} disponibles)</div>
                     </div>
-                    <p class="text-gray-700 mb-4">${producto.descripcion}</p>
+                    <p class="text-gray-700 mb-4 product-description-text">${shopEscape(producto.descripcion)}</p>
                     <p class="text-3xl font-extrabold text-naranja mb-4">${formatPrice(producto.precio)}</p>
-                    <ul class="text-gray-700 list-none mb-6 space-y-2">
-                        <li>✓ Temperatura mínima: -5°C</li>
-                        <li>✓ Peso: 1.8 kg</li>
-                        <li>✓ Impermeable</li>
-                        <li>✓ Ideal para montaña</li>
-                    </ul>
+                    <p class="text-gray-700 mb-6">Categoría: ${shopEscape(producto.categoria)}</p>
                     <div class="flex items-center gap-3 mb-6">
                         <label class="text-sm font-semibold text-gray-700" for="quantityInput">Cantidad</label>
-                        <input id="quantityInput" type="number" min="1" max="5" value="1" class="w-20 rounded-lg border border-gray-300 px-3 py-2" />
+                        <input id="quantityInput" type="number" min="1" max="${Math.max(1, Math.min(producto.stock,99))}" step="1" value="1" ${producto.stock < 1 ? 'disabled' : ''} class="w-20 rounded-lg border border-gray-300 px-3 py-2" />
                     </div>
                     <div class="detalle-actions">
-                        ${producto.communityListing ? '<button class="btn btn-welcome" type="button" data-community-link><i class="bi bi-people"></i> Ver comunidad</button>' : `<button class="btn btn-welcome" type="button" data-add-product="${String(producto.id).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"><i class="bi bi-cart-check-fill"></i> Agregar al carrito</button>`}
+                        ${producto.communityListing ? '<button class="btn btn-welcome" type="button" data-community-link><i class="bi bi-people"></i> Ver comunidad</button>' : `<button class="btn btn-welcome" type="button" data-add-product="${shopEscape(producto.id)}" ${producto.stock < 1 ? 'disabled' : ''}><i class="bi bi-cart-check-fill"></i> ${producto.stock < 1 ? 'Sin existencias' : 'Agregar al carrito'}</button>`}
                     </div>
                 </div>
             </div>
@@ -348,6 +361,9 @@ function showProductDetail(id) {
         });
     });
     detail.classList.remove('hidden');
+    if (oldQuantity) detail.querySelector('#quantityInput').value = oldQuantity;
+    detail.querySelector('.product-modal-card').scrollTop = oldScroll;
+    if (!reopening) detail.querySelector('[data-close-product]').focus({ preventScroll: true });
 }
 
 function closeProductModal() {
@@ -357,7 +373,9 @@ function closeProductModal() {
         detail.classList.add('hidden');
         detail.innerHTML = '';
     }
-    document.body.classList.remove('modal-open');
+    if (!document.body.classList.contains('cart-open')) document.body.classList.remove('modal-open');
+    if (productDetailFocus?.isConnected && !document.body.classList.contains('cart-open')) productDetailFocus.focus({ preventScroll: true });
+    productDetailFocus = null;
 }
 
 function showAddFeedback() {
@@ -373,10 +391,12 @@ function showAddFeedback() {
 
 function addToCart(productId, showFeedback = false) {
     const producto = productos.find((item) => String(item.id) === String(productId));
-    const quantityInput = document.getElementById('quantityInput');
-    const quantity = quantityInput ? Number(quantityInput.value) || 1 : 1;
+    const quantityInput = showFeedback ? document.getElementById('quantityInput') : null;
+    const quantity = quantityInput ? Number(quantityInput.value) : 1;
 
     if (!producto) return;
+    const current = state.cart.find(item => String(item.id) === String(productId))?.quantity || 0;
+    if (!Number.isInteger(quantity) || quantity < 1 || current + quantity > producto.stock || current + quantity > 99) return showToast('Cantidad inválida o stock insuficiente.', 'error');
 
     const existing = state.cart.find((item) => String(item.id) === String(productId));
     if (existing) {
@@ -400,7 +420,7 @@ function renderCart() {
     const cartSummary = document.getElementById('cartSummary');
     const cartEmpty = document.getElementById('cartEmpty');
     const recommendedProducts = document.getElementById('recommendedProducts');
-    const checkoutButton = document.getElementById('checkoutButton');
+    let checkoutButton = document.getElementById('checkoutButton');
     const cartCount = document.getElementById('cartCount');
     const cartCountInline = document.getElementById('cartCountInline');
 
@@ -424,7 +444,7 @@ function renderCart() {
         cartBody.innerHTML = state.cart.map((item) => `
             <div class="flex items-center justify-between border-b border-gray-200 py-3">
                 <div>
-                    <p class="font-semibold text-bosque">${item.name}</p>
+                    <p class="font-semibold text-bosque">${shopEscape(item.name)}</p>
                     <p class="text-sm text-gray-500">${formatPrice(item.price)} c/u</p>
                 </div>
                 <div class="flex items-center gap-2">
@@ -438,20 +458,21 @@ function renderCart() {
 
         const discountPercent = getPromoDiscount(state.promoCode);
         const discountAmount = subtotal * discountPercent;
-        const total = subtotal - discountAmount;
+        const amounts = cartAmounts();
+        const total = amounts.total / 100;
 
         cartSummary.innerHTML = `
             <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <label class="text-sm font-semibold text-bosque" for="promoCodeInput">Código promocional</label>
                 <div class="mt-2 flex gap-2">
-                    <input id="promoCodeInput" type="text" value="${state.promoCode}" placeholder="RUTA10" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                    <input id="promoCodeInput" type="text" value="${shopEscape(state.promoCode)}" placeholder="Código de promoción" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
                     <button id="applyPromoButton" type="button" class="btn btn-welcome btn-small">Aplicar</button>
                 </div>
                 <div class="mt-3 flex justify-end">
                     <button id="clearCartButton" type="button" class="text-sm font-semibold text-red-500">Vaciar carrito</button>
                 </div>
                 <div id="promoAlert" class="popout-alert hidden mt-3"></div>
-                ${state.promoCode ? `<p id="promoStatus" class="mt-2 text-xs text-emerald-600">Descuento ${state.promoCode} aplicado</p>` : ''}
+                ${state.promoCode ? `<p id="promoStatus" class="mt-2 text-xs text-emerald-600">Descuento ${shopEscape(state.promoCode)} aplicado</p>` : ''}
             </div>
             <div class="flex items-center justify-between text-sm text-gray-600 mt-4">
                 <span>Subtotal</span>
@@ -462,9 +483,10 @@ function renderCart() {
                 <span>- ${formatPrice(discountAmount)}</span>
             </div>` : ''}
             <div class="flex items-center justify-between text-lg font-bold text-bosque">
-                <span>Total</span>
+                <span>Total estimado (IVA ${amounts.rate/100}%)</span>
                 <span>${formatPrice(total)}</span>
             </div>
+            <p class="text-sm">Base gravable: ${formatPrice((amounts.subtotal-amounts.discount)/100)} · IVA: ${formatPrice(amounts.tax/100)}. El checkout verifica precios y promociones.</p>
             <a href="checkout.html" class="btn btn-primary w-full mt-4 inline-flex justify-center" id="checkoutButton">Checkout</a>
         `;
     }
@@ -521,8 +543,14 @@ function renderCart() {
         };
     }
 
+    checkoutButton = document.getElementById('checkoutButton');
     if (checkoutButton) {
-        checkoutButton.addEventListener('click', () => {
+        checkoutButton.onclick = async event => {
+            event.preventDefault();
+            try { await window.RutaCommerce.flushCart(); window.location.href='checkout.html'; } catch(error) { showToast(error.message, 'error'); }
+        };
+        checkoutButton.addEventListener('click', event => {
+            event.preventDefault();
             closeCart();
         });
     }
@@ -533,8 +561,8 @@ function renderCart() {
             <div class="recommended-card">
                 <div class="recommended-avatar"><i class="bi bi-person-circle"></i></div>
                 <div class="recommended-content">
-                    <h4>${producto.nombre}</h4>
-                    <p class="text-sm text-gray-600">${producto.descripcion}</p>
+                    <h4>${shopEscape(producto.nombre)}</h4>
+                    <p class="text-sm text-gray-600">${shopEscape(producto.descripcion)}</p>
                     <p class="text-sm font-semibold text-naranja mt-2">${formatPrice(producto.precio)}</p>
                 </div>
                         <button class="btn btn-welcome btn-small" type="button" onclick='window.shop.addToCart(${JSON.stringify(producto.id)})'>Agregar</button>
@@ -563,6 +591,8 @@ function changePage(p) {
 function changeQuantity(productId, delta) {
     const item = state.cart.find((entry) => String(entry.id) === String(productId));
     if (!item) return;
+    const product = productos.find(row => String(row.id) === String(productId));
+    if (delta > 0 && (!product || item.quantity + delta > product.stock || item.quantity + delta > 99)) return showToast('Stock insuficiente.', 'error');
     item.quantity += delta;
     if (item.quantity <= 0) {
         state.cart = state.cart.filter((entry) => String(entry.id) !== String(productId));
@@ -592,7 +622,7 @@ function closeCart() {
     const cartPage = document.getElementById('cartPage');
     if (!cartPage) return;
     cartPage.classList.add('hidden');
-    document.body.classList.remove('modal-open');
+    if (!state.selectedProductId) document.body.classList.remove('modal-open');
     document.body.classList.remove('cart-open');
 }
 
@@ -670,6 +700,7 @@ async function initShop() {
     });
 
     document.addEventListener('click', event => {
+        if (event.target.closest('[data-close-product]') || event.target.matches('[data-product-backdrop]')) { closeProductModal(); return; }
         const detailButton = event.target.closest('[data-product-detail]');
         if (detailButton) showProductDetail(detailButton.dataset.productDetail);
         const addButton = event.target.closest('[data-add-product]');
@@ -730,21 +761,31 @@ async function initShop() {
         }
     });
 
+    window.addEventListener('commerce-cart', event => { state.cart = event.detail.items; renderCart(); renderProducts(); });
+    window.addEventListener('commerce-auth', event => {
+        if (event.detail) window.RutaCommerce.prepareCart().catch(error => showToast(error.message + ' Tu carrito local se conserva.', 'error'));
+    });
+    await window.RutaCommerce.init();
+    try { await window.RutaCommerce.prepareCart(); } catch(error) { showToast(error.message + ' Tu carrito local se conserva.', 'error'); }
+    try { window.rutaPromotions = await window.RutaCommerce.read('promociones'); window.rutaTax = await window.RutaCommerce.publicConfig(); } catch(error) { console.warn('Promociones no disponibles:',error); }
     await loadScmCatalog();
     renderProducts();
     renderCart();
 
     try {
-        const [{ getApp }, { getFirestore, collection, onSnapshot }, { watchChanges }] = await Promise.all([
+        const [{ getApp }, { getFirestore, collection, doc, onSnapshot }, { watchChanges }] = await Promise.all([
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
             import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
             window.RutaSalvajeLiveSync
         ]);
         const db = getFirestore(getApp());
         watchChanges({
-            onSnapshot, references: [collection(db, 'scm_productos')],
+            onSnapshot, references: [collection(db, 'scm_productos'), collection(db, 'promociones'), doc(db, 'configuracion', 'comercio')],
             refresh: async () => {
                 await loadScmCatalog();
+                window.rutaPromotions = await window.RutaCommerce.read('promociones');
+                window.rutaTax = await window.RutaCommerce.publicConfig();
+                renderCart();
                 renderProducts();
                 if (state.selectedProductId) {
                     if (productos.some(product => String(product.id) === String(state.selectedProductId))) showProductDetail(state.selectedProductId);

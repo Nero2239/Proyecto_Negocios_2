@@ -12,6 +12,17 @@
     --shadow-card: 0 10px 25px rgba(17, 24, 39, 0.06);
 }
 
+.commerce-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    align-items: end;
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+.commerce-form input { width: 100%; min-width: 0; }
+#commerceNotice { color: var(--admin-accent); overflow-wrap: anywhere; }
+#commerceAdmin > .panel-card { margin-bottom: 1rem; }
+
 * {
     box-sizing: border-box;
 }

@@ -240,9 +240,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!existing) await save('scm_productos', null, { ...source, origen: source.origen || 'tienda' });
                 else if (source.publicacion_id && source.imagen_url && JSON.stringify(productGallery(existing)) !== JSON.stringify(productGallery(source))) await save('scm_productos', existing.id, { imagenes: source.imagenes, imagen_url: source.imagen_url });
             }
-            for (const item of products.filter(product => !product.origen)) {
-                await save('scm_productos', item.id, { origen: 'demo_scm' });
-            }
+            // Existing catalog records keep their provenance; opening SCM must not label
+            // real products as demo data or make them candidates for legacy cleanup.
             products = await read('scm_productos');
             localStorage.setItem('scm_catalog_cache', JSON.stringify(products));
         }

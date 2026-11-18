@@ -199,28 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.dispatchEvent(new CustomEvent('ruta-salvaje-categories-updated', { detail: { categories: updated } }));
         return category;
     }
-    let promotions = [
-        {
-            id: 1,
-            name: 'Campamento fin de semana',
-            type: 'Evento',
-            target: 'Fin de semana de aventura',
-            discount: 20,
-            start: '2026-07-10',
-            end: '2026-07-14',
-            notes: 'Válida para tiendas y sacos.'
-        },
-        {
-            id: 2,
-            name: 'Luna de verano',
-            type: 'Producto',
-            target: 'Linterna Solar LED',
-            discount: 15,
-            start: '2026-07-01',
-            end: '2026-07-20',
-            notes: 'Aplicable solo si hay stock mayor a 5.'
-        }
-    ];
+    let promotions = [];
     let clients = [
         { id: 1, name: 'Laura Gómez', email: 'laura@example.com', phone: '555-0101', issue: 'Problema con pedido pendiente', status: 'Pendiente' },
         { id: 2, name: 'Diego Ruiz', email: 'diego@example.com', phone: '555-0102', issue: 'Consulta por devolución', status: 'Atendido' },
@@ -267,7 +246,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function setView(viewName) {
         // Use the same persisted records and editors as ERP instead of the old demo views.
-        const aliases = { productos: 'scm-productos', clientes: 'crm', pedidos: 'erp', reportes: 'erp' };
+        const aliases = { promociones: 'comercio', productos: 'scm-productos', clientes: 'crm', pedidos: 'erp', reportes: 'erp' };
         const requestedView = viewName;
         viewName = aliases[viewName] || viewName;
         if (roleViews && !roleViews.has(viewName)) viewName = 'erp';
@@ -281,6 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const titles = {
+            comercio: 'Promociones, IVA y monederos', tickets: 'Atención a clientes', transferencias: 'Confirmación de transferencias',
             dashboard: 'Inicio',
             'scm-dashboard': 'Dashboard SCM',
             'scm-productos': 'Productos SCM',
@@ -1039,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const [catalog, customers, companyOrders] = await readDashboard();
             const now = new Date();
             const todayOrders = companyOrders.filter(order => new Date(order.fecha).toDateString() === now.toDateString());
-            const pending = companyOrders.filter(order => order.estado === 'pendiente').length;
+            const pending = companyOrders.filter(order => ['pendiente', 'pendiente_pago'].includes(order.estado)).length;
             const monthlySales = companyOrders.filter(order => {
                 const date = new Date(order.fecha_procesamiento || order.fecha);
                 return order.estado === 'procesada' && date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();

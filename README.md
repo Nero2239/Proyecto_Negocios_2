@@ -1,5 +1,16 @@
 ﻿# Ruta Salvaje - E-commerce de Camping
 
+## Etapa 4 — Carrito y agregados
+
+Desarrollada en los archivos locales: carrito Firestore con migración de visitantes, checkout transaccional mediante Firebase Functions, pagos simulados, transferencias pendientes y su confirmación, monedero, promociones, IVA, tickets y perfil conectado a CRM/SCM/ERP. Cada pedido genera un comprobante persistente descargable y un registro de correo simulado en Firestore, visibles desde confirmación e historial. No se envían correos de compra reales. La descripción de las etapas anteriores se conserva más abajo como referencia histórica.
+
+Consulta [la documentación completa de Etapa 4](docs/ETAPA4.md) para el modelo de datos, operaciones, archivos modificados, resultados de pruebas y configuración Firebase pendiente. No se realizó despliegue ni se agregaron compras de ejemplo en producción.
+
+El endpoint de compras consultado devuelve **HTTP 404** en `camping-3a6a4/us-central1/commerce`. El código local mantiene `onCall` + `httpsCallable`, CORS e invocación pública con Authentication obligatoria, y `.firebaserc` selecciona el proyecto correcto. Hace falta publicar o corregir el servicio remoto antes de usar las operaciones autenticadas. Los [pasos y comandos de activación](docs/ETAPA4.md#pasos-de-firebase-pendientes-de-autorización) están preparados; no se ejecutó ningún despliegue ni se reemplazó el backend por compras locales.
+
+Pruebas históricas: 21 locales, 7 del emulador y 26 comprobaciones en Chrome. Por instrucción del usuario no se ejecutaron más pruebas; estos resultados no certifican los últimos ajustes del comprobante, notificaciones o sesión, ni un despliegue productivo. Instalar dependencias con `npm ci` y `npm ci --prefix functions`. El backend y sus reglas requieren configuración y despliegue autorizado; las operaciones financieras no se simulan localmente cuando el servidor falla.
+
+
 ## Descripción del Proyecto
 
 **Ruta Salvaje** es un prototipo de sitio web para una tienda de camping, diseñado con un enfoque en la experiencia de usuario (UX) y una interfaz de usuario (UI) atractiva y funcional. El proyecto simula un E-commerce completo utilizando tecnologías front-end, donde los visitantes pueden explorar productos, gestionar un carrito de compras y navegar por diferentes secciones informativas.
@@ -31,7 +42,7 @@ El ERP incluye reportes de ventas de los últimos seis meses, productos más ven
 
 Administración y logística pueden crear, editar y eliminar productos desde **Productos SCM** y registrar movimientos desde **Inventario SCM** en el ERP. Administración y ventas pueden crear y editar clientes CRM desde **Clientes CRM**; solo administración puede eliminarlos. Se reutilizan las operaciones SCM/CRM para conservar validaciones, confirmaciones, imágenes, categorías, reglas PUSH/PULL y sincronización de datos. La pestaña **Usuarios y roles** permite a administración asignar roles a otros perfiles vinculados a su UID; no permite cambiar el rol de la propia cuenta.
 
-Este proyecto no contiene una API REST ni Firebase Functions: las operaciones transaccionales se ejecutan desde el cliente contra Firestore, protegidas por `firestore.rules`.
+En la etapa ERP original, las operaciones se ejecutaban desde el cliente contra Firestore. La Etapa 4 añade la callable `commerce` en Firebase Functions para el checkout, monedero, promociones, impuestos, tickets y edición de perfil; las compras se integran a las mismas colecciones ERP.
 
 ## Activar autenticación y reglas
 
@@ -305,8 +316,8 @@ Guardar en `localStorage` (simulado)
 
 2.  **Aplicar un código de descuento**:
     -   Abre el panel del carrito.
-    -   En el resumen de compra, introduce el código `RUTA10` y haz clic en "Aplicar".
-    -   Verifica que se aplique un 10% de descuento al total.
+    -   En el resumen de compra, introduce el código de una promoción vigente registrada desde administración y haz clic en "Aplicar".
+    -   Verifica el descuento según las condiciones de esa promoción y el IVA configurado. No se crean códigos promocionales de ejemplo automáticamente.
 
 3.  **Filtrar productos**:
     -   En `equipo.html`, usa el buscador o el selector de categorías.
@@ -321,9 +332,9 @@ Guardar en `localStorage` (simulado)
 
 ## Notas Importantes
 
-1.  **Proyecto de Simulación**: Este es un prototipo front-end. No hay una base de datos real ni un servidor backend. Toda la "lógica de negocio" y los datos son simulados en JavaScript.
-2.  **Persistencia de Datos**: El estado de la aplicación (como el contenido del carrito) se almacena en `localStorage`. Para reiniciar el estado, puedes borrar los datos de `localStorage` en las herramientas de desarrollador de tu navegador.
-3.  **Formularios**: Los formularios, como el de contacto, son funcionales en la interfaz pero no envían datos a un servidor. Simplemente muestran un mensaje de confirmación.
+1.  **Pagos de simulación**: No se cobra dinero real ni se almacenan números de tarjeta o CVV. Pedidos, pagos, monederos, comprobantes y correos simulados se registran en Firestore mediante el backend de comercio.
+2.  **Persistencia de datos**: El visitante conserva un carrito local; las cuentas autenticadas usan un carrito Firestore. Borrar `localStorage` no elimina pedidos, saldos ni movimientos persistentes.
+3.  **Formularios conectados**: Contacto y perfil crean tickets vinculados al CRM. Las operaciones que requieren el backend muestran un error si no pueden guardarse; no se presenta una confirmación ficticia.
 
 ---
 
